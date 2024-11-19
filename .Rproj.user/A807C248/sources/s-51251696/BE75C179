@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1651252671207.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3770277144",
+    "id" : "BE75C179",
+    "lastKnownWriteTime" : 1647538370,
+    "last_content_update" : 1647538370,
+    "path" : "Z:/Thorne/Data Files/2 Climate Change/3 Projects/8 Water Quality/2 Processing & analysis/MASTER_Water processing.Rmd",
+    "project_path" : "MASTER_Water processing.Rmd",
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

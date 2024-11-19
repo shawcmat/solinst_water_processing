@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1577145096547.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "F1983826",
+    "lastKnownWriteTime" : 7801114379452376428,
+    "last_content_update" : 1577145096547,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "B074D429",
+        "caption" : "level_working",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=level_working&cache_key=B074D429",
+        "displayedObservations" : 354354,
+        "environment" : "",
+        "object" : "level_working",
+        "preview" : 0,
+        "totalObservations" : 354354,
+        "variables" : 5
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

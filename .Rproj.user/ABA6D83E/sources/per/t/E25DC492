@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1576879037923.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3859747605",
+    "id" : "E25DC492",
+    "lastKnownWriteTime" : 1577150404,
+    "last_content_update" : 1577150409563,
+    "path" : "//gs/SacramentoCA-B/Davis/Thorne/Data Files/2 Climate Change/3 Projects/8 Water Quality/2 Processing & analysis/Water processing_sbdeep_KM.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "169,16",
+        "last_setup_crc32" : "C620CF2874177699",
+        "scrollLine" : "163"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

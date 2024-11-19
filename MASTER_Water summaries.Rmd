@@ -1,0 +1,47 @@
+---
+title: "Water Summaries"
+author: "Scott F. Jones"
+date: "January 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+remove(list=ls())
+#pacman::p_load(wlTools, dplyr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(foreach)
+library(RJSONIO)
+```
+
+## Purpose
+
+This document summarizes and visualizes QAQCed water level and salinity data for USGS WERC Davis Field Station water logger deployments, for the Karen Thorne group.
+
+## Summaries
+
+```{r level summarize}
+# enter the file paths and R object names for the QAQCed water level and salinity data. 
+# change "SITE.FOLDER" and "Robj.NAME"as necessary in examples below
+level.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/Robj.NAME.R"
+salinity.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/Robj.NAME.R"
+
+# source the script that summaries water levels
+source("../2 Processing & analysis/scripts for processing/summary_modern.R")
+```
+
+## Plots
+
+You can also embed plots, for example:
+
+```{r visualize}
+ggplot(data=level.data_monthly, aes(x=month, y=water.temp)) + 
+  geom_line() + geom_point() + 
+  geom_errorbar(aes(ymin = water.temp - 1.96*watertemp.sd, ymax = water.temp + 1.96*watertemp.sd), width = 0) +
+  theme_bw() + theme(text = element_text(size = 14)) + 
+  labs(x="Time", y="Monthly water temperature (C)")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,29 @@
+logger,water_density,sensor_navd88,offset,exposure_height,
+Pet01,1011,0.285,NA,0.6,
+PetOdy,NA,NA,0.7,NA,
+Hok03,1024,,,0.55,"(called ""HOKA"" in the field)"
+Hok03B,1024,,,,"(called ""HOKB"" in the field)"
+HokOdy,NA,NA,0.3,NA,
+Mad01-A,1024,,,0.3,"(currently called ""MADA"" in the field)"
+Mad01-B,1024,,,,"(currently called ""MADB"" in the field)"
+MadOdy,NA,NA,,,
+SanP01,1006,0.65,NA,0.8,
+SanPOdy,NA,NA,0.5,NA,
+SBDeep,1020,,0.35,0.35,
+SBEel,1020,,0.375,0.4,
+Miner01,1000,-0.246,,,
+MinerOdy,NA,,,,
+PaloAlto,1011,-0.844166667,,,
+Little Dutch,1004,0.537,NA,NA,
+Marsh Creek,1004,0.232333333,,,
+Dutch Slough,1004,0.005666667,,,
+ISD,1004,-0.2011,,,assume 02/04 cable length is bolt to sensor but not specified
+Burroughs,1004,-1.756,,," -1.4623 (? Adjusted to match meta data file) only valid through winter deployment, well was redrilled and length changed in summer 2022. "
+Impounded,1004,-3.416,,,"Value -2.9184 (?) assume 2/18 cable measurement is bolt to sensor, but not specified. Previous to this deployment the cable was 21cm shorter - had to extened the top of the PVC due to flooding and overtopping of well. Also current elevation data in metadata spreadsheet is for intiial well height, need to re RTK to get new extension accounted for for deployments after 02/18"
+Em Mid Int,1004,-0.3635,,,Value -0.1279 (?)
+Gil Mid Int,1004,0.049,,,previous entry = 0.3413 (?)
+Big Break,1004,-0.302,,,
+LJI,1004,,,,
+LJI North Well,1004,-0.272486,,,
+LJI South Well,1004,-0.35125983,,,
+Kosrae,1004,1,,,

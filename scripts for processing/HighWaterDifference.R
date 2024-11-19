@@ -1,0 +1,57 @@
+library(dplyr)
+library(foreach)
+library(RJSONIO)
+library(lubridate)
+
+# calculate date windows of data
+date.start = as.Date(min(data_working$time, na.rm = TRUE))
+date.end = as.Date(max(data_working$time, na.rm = TRUE))
+date.intervals = seq(date.start, date.end, by = 'month')
+  
+noaa.high.water <- foreach(d1 = head(date.intervals, -1), d2 = tail(date.intervals, -1), .combine = rbind) %do% {
+  address <- sprintf('http://tidesandcurrents.noaa.gov/api/datagetter?product=high_low&application=NOS.COOPS.TAC.WL&station=%s&begin_date=%s&end_date=%s&datum=NAVD&units=metric&time_zone=LST&format=json',
+                     station.id, 
+                     strftime(d1, '%Y%m%d'), 
+                     strftime(d2, '%Y%m%d'))
+  conn <- url(address)
+  noaa.data <- data.frame(t(sapply(fromJSON(paste(readLines(conn, n=-1L, ok=TRUE), collapse=""))$data, c))) %>%
+    filter(ty %in% c('H ', 'HH')) %>%
+    mutate(time = as.POSIXct(t, tz="Etc/GMT+8", format = "%Y-%m-%d %H:%M"), 
+           v = as.numeric(levels(v)[v]), 
+           ty = as.factor(sub('(H{1,2}) ?', 'M\\1W', ty))) %>%
+    select(tide.type = ty, noaa.date = time, noaa.value = v)
+  close(conn)
+  noaa.data
+}
+
+# Calculate search bounds for high/higher water in local water level data (plus/minus two hours)
+lower.bounds <- noaa.high.water$noaa.date - 3 * 60 * 60
+upper.bounds <- noaa.high.water$noaa.date + 3 * 60 * 60
+  
+# Find high water in local water level data
+local.high.water <- noaa.high.water
+local.high.water$local.value <- foreach(lb = lower.bounds, ub = upper.bounds, .combine = 'c') %do% 
+  max(petlongterm$water.level.NAVD88[petlongterm$time > lb & petlongterm$time < ub])
+
+# Calculate difference in MHW and MHHW
+local.high.water <- local.high.water %>%
+  filter(!is.infinite(local.value)) %>%
+  mutate(diff = local.value - noaa.value)
+
+
+
+ggplot(data=subset(local.data, tide.type=="MHW"), aes(x=noaa.date, y=local.value)) + 
+  geom_line() + 
+  theme_bw() + theme(text = element_text(size = 14), panel.grid = element_blank()) + 
+  labs(x = "Time", y = "Water level (m NAVD88)")
+
+weekly = local.high.water %>% 
+  group_by(tide.type, week = floor_date(noaa.date, "week")) %>% 
+  summarise(noaa.value = mean(noaa.value, na.rm = TRUE), local.value = mean(local.value, na.rm = TRUE), diff = mean(diff, na.rm = TRUE))
+
+monthly = local.high.water %>% 
+  group_by(tide.type, month = floor_date(noaa.date, "month")) %>% 
+  summarise(noaa.value = mean(noaa.value, na.rm = TRUE), local.value = mean(local.value, na.rm = TRUE), diff = mean(diff, na.rm = TRUE))
+
+# Export dataframes for future use
+saveRDS(local.high.water, "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R")

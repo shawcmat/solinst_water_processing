@@ -1,0 +1,198 @@
+---
+title: "Water Processing"
+author: "Scott F. Jones"
+date: "December 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+remove(list=ls())
+#pacman::p_load(wlTools, dplyr)
+library(wlTools)
+library(dplyr)
+library(ggplot2)
+#devtools::install_github('acgoodman/wlTools')
+```
+
+## Purpose
+
+This document outlines the processing of water level and salinity data for USGS WERC Davis Field Station water logger deployments, for the Karen Thorne group.
+
+## Water level
+### Processing
+
+This processing uses a canned script to process water level data, but needs inputs to know where to look for the information it needs. We need to tell the script where to find barometric pressure data, raw water level data, and the logger we are processing. 
+
+Edit the code below to match the current processing batch. When filled in, press the green triangle to run the code and process the data. 
+
+```{r water level process}
+# enter the file path and csv name for the raw baro data. 
+# change "SITE.FOLDER" and "CSV.NAME" as necessary in example below
+baro.path = "../1 Site data/SITE.FOLDER/1 Raw data/Baro/CSV.NAME.csv"
+
+# enter the file path and csv name for the raw water level data. 
+# change "SITE.FOLDER" and "CSV.NAME"as necessary in example below
+level.path = "../1 Site data/SITE.FOLDER/1 Raw data/Water level/CSV.NAME.csv"
+
+# enter the type of water level logger, "hobo" or "solinst"
+# if processing throws an error, you may have the wrong logger type
+logger.type = "hobo"
+
+# enter the logger name (check water.accessory.csv file if unsure)
+logger.name = "LOGGER.NAME"
+
+# enter the file path and R object for the processed water level data that you will create.
+# change "SITE.FOLDER" and "R.NAME" as necessary in example below
+level.processed.path = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.Rds"
+
+# run the script that processes the water data
+source("./scripts for processing/waterlevel_processing_modern.R")
+```
+
+### QAQC
+
+This section of code combines the newly processed water data with long-term QAQCed dataset as a working file, and visualizes the data to detect any errors or issues that need to be addressed. 
+
+You will be visualizing the latest processed data to search for problems. Edit the code below to match the current processing bath, and press the green triangle to run the code and process the data. Then, inspect the figures to find any issues. 
+
+```{r water level qaqc}
+# enter file path and R object for processed water level that was just created
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+level.processed.path = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R"
+
+# enter file path and R object for longterm QAQCed water level
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+level.QAQC.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_QAQC.R"
+
+# enter file path and R object for working water level file you will create
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+level.working.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_working.R"
+
+# run script to combine newly processed water level data with long-term dataset, and save/load as a working file
+source("./scripts for processing/waterlevel_qaqc_modern.R")
+
+# plot the dataset by year to visualize latest processed data compared to long-term data, and to note problems
+# replace "START" and "END" with the year before the year of interest, and the year after, respectively
+ggplot(data = subset(level_working, time > "START-12-31" & time < "END-01-01"), aes(x = time, y = water.level.NAVD88)) + geom_line()
+
+# to find movement in the baseline, you can zoom in to that part of the y axis using ylim
+# change LOWER to a water level lower than the baseline, and UPPER to a water level just above the baseline to make shifts easier to see
+ggplot(data = subset(level_working, time > "START-12-31" & time < "END-01-01"), aes(x = time, y = water.level.NAVD88)) + geom_line() + ylim(LOWER, UPPER)
+```
+
+When problems are found during this process, they need to be recorded in the READ_ME.txt file associated with each site. For example, any errors in the processed data for Pet01 water level logger would go into "1 Site data/Petaluma/3 QAQCed data" folder. Make a note of the problem (e.g., data on 04/01/2015 is too high), and then sign the note with a date stamp and your initials.
+
+Write down extreme values, data gaps, and anything else concerning. Also note if the baseline shifted more than expected from RTK error (i.e., more than 5 cm) during the latest deployment (the baseline is the sensor elevation in NAVD88). Shifts in sensor elevation should be cross-referenced with the latest sensor elevation recorded in the field using RTK surveying. If they don't match, make a note in the READ_ME.txt. 
+
+Once any obvious errors or problems are identified, and any shift in baseline has been cross-referenced, go over the QAQC READ_ME.txt file with senior staff to make a plan for how to address each problem in the working file. 
+
+### Export
+
+Once problems are addressed or fixed in the working file, continue with the next section of QAQC. This trims out water level and temperature data from when the sensor is exposed, and exports a QAQCed water dataset that's ready for salinity processing and datum calculation. Note: the cut off for sensor exposure is for the entire dataset so may be higher than necessary for the current deployment. 
+
+You need to input where the current working file lives, the start date for the deployment you're working on, the logger name, and where the final QAQCed file should live. When filled in, press the green triangle to run the code and finish water level QAQC!
+
+```{r water level export}
+# enter the file path and R object name for the working processed file
+# replace "SITE.FOLDER" and "R.NAME" as appropriate
+working.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_working.R"
+
+# enter the start date for the latest deployment that was just QAQCed
+start.date = "YYYY-MM-DD"
+
+# enter the logger name (check water.accessory.csv file if unsure)
+logger.name = "LOGGER.NAME"
+
+# enter the file path and R object name for the final QAQCed file!
+# replace "SITE.FOLDER" and "R.NAME" as appropriate; R.NAME should have logger name, start and end dates. E.g., "Pet01_2009.12.17_2019.03.18_QAQC.R"
+qaqc.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_QAQC.R"
+
+# source the code that QAQCs temperature data and exports a new QAQC file
+source("./scripts for processing/waterlevel_export_modern.R")
+```
+
+## Salinity
+### Processing
+
+This processing uses a canned script to process salinity data, but needs inputs to know where to look for the information it needs. This step must be completed after water data for the same time period is QAQCed, as We need accurate water levels to remove salinity measurements when the sensor is dry.  
+
+Edit the code below to match the current processing batch. When filled in, press the green triangle to run the code and process the data.
+
+```{r salinity processing}
+# enter the file path and csv name for the raw salinity data. 
+# change "SITE.FOLDER" and "CSV.NAME" as necessary in example below
+salinity.path = "../1 Site data/SITE.FOLDER/1 Raw data/Salinity/CSV.NAME.csv"
+
+# enter the file path and R object name for the QAQCed water level data nearest the salinity logger
+# change "SITE.FOLDER" and "R.Name" as necessary in example below
+level.QAQC.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_QAQC.R"
+
+# enter the name of the logger you are processing. Reference water.processing.csv if necessary
+logger.name = "LOGGER.NAME"
+
+# enter the file path and R object for the processed salinity data that you will create.
+# change "SITE.FOLDER" and "R.NAME" as necessary in example below
+salinity.processed.path = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R"
+
+# run the script that processes the water data
+source("./scripts for processing/salinity_processing_modern.R")
+```
+
+### QAQC
+
+This section of code combines the newly processed salinity data with long-term QAQCed dataset as a working file, and visualizes the data to detect any errors or issues that need to be addressed.  
+
+You will be visualizing the latest processed data to search for problems. Edit the code below to match the current processing bath, and press the green triangle to run the code and process the data. Then, inspect the figures to find any issues.
+
+```{r salinity qaqc}
+# enter file path and R object for processed salinity that was just created
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+salinity.processed.path = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R"
+
+# enter file path and R object for longterm QAQCed salinity
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+salinity.QAQC.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_QAQC.R"
+
+# enter file path and R object for working water level file you will create
+# replace "SITE.FOLDER" and "R.NAME.R" as appropriate
+salinity.working.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_working.R"
+
+# run script to combine newly processed water level data with long-term dataset, and save/load as a working file
+source("./scripts for processing/salinity_qaqc_modern.R")
+
+# plot the dataset by year to get the exact range of extreme values, and to note any other problems
+# replace "START" and "END" with the year before the year of interest, and the year after, respectively
+# can change "year" to "month" or "week" within scale_x_datetime()
+ggplot(data = subset(salinity_working, time > "START-12-31" & time < "END-01-01"), aes(x = time, y = salinity)) + geom_line() + scale_x_datetime("year")
+
+# to zoom in on the y-axis use ylim
+ggplot(data = subset(salinity_working, time > "START-12-31" & time < "END-01-01"), aes(x = time, y = salinity)) + geom_line() + ylim(LOWER, UPPER)
+```
+
+When problems are found during this process, they need to be recorded in the READ_ME.txt file associated with each site. For example, any errors in the processed data for PetOdy salinity would go into "1 Site data/Petaluma/3 QAQCed data" folder. Make a note of the problem (e.g., data on 04/01/2015 is impossibly low), and then sign the note with a date stamp and your initials.
+
+Write down extreme values, data gaps, and anything else concerning. Note if the logger failed, and cross-reference field notebooks when necessary. Write down all problems in the READ_ME.txt file. 
+
+Once any obvious errors or problems are identified, go over the QAQC READ_ME.txt file with senior staff to make a plan for how to address each problem. 
+
+### Export
+
+Once problems are addressed or fixed in the working file, continue with the next section of QAQC. This trims out salinity data from when the sensor is exposed, and exports a QAQCed salinity dataset that's ready for summarizing. 
+
+You need to input where the current working file lives, the start date for the deployment you're working on, the logger name, and where the final QAQCed file should live. When filled in, press the green triangle to run the code and finish salinity QAQC!
+
+Note: the offset for sensor exposure may be higher or lower than necessary for the current deployment. If too much data is being trimmed, lower the exposure height; if too little data is being trimmed with lots of noise still included from low water levels, raise the exposure height (in the water accessory csv). 
+
+```{r salinity export}
+# enter the file path and R object name for the working processed file
+# replace "SITE.FOLDER" and "R.NAME" as appropriate
+working.path = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME_working.R"
+
+# enter the file path and R object name for the final QAQCed file!
+# replace "SITE.FOLDER" and "R.NAME" as appropriate; R.NAME should have logger name, start and end dates. E.g., "Pet01_2009-12-17_2019_03-18_QAQC.R"
+qaqc.path = "../1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME_QAQC.R"
+
+# source the code that QAQCs temperature data and exports a new QAQC file
+source("./scripts for processing/salinity_export_modern.R")
+```

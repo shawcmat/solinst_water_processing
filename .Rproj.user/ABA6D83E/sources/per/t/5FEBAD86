@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1577147227698.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "5FEBAD86",
+    "lastKnownWriteTime" : 7801114379452376428,
+    "last_content_update" : 1577147227698,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "55AEDF2C",
+        "caption" : "sb.deep.2",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=sb.deep.2&cache_key=55AEDF2C",
+        "displayedObservations" : 17508,
+        "environment" : "",
+        "object" : "sb.deep.2",
+        "preview" : 0,
+        "totalObservations" : 17508,
+        "variables" : 5
+    },
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

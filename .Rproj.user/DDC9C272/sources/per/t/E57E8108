@@ -1,0 +1,32 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1578601093416.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "E57E8108",
+    "lastKnownWriteTime" : 5292976843906638626,
+    "last_content_update" : 1578601093416,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "725316AC",
+        "caption" : "local.high.water",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=local.high.water&cache_key=725316AC",
+        "displayedObservations" : "6522",
+        "environment" : "",
+        "object" : "local.high.water",
+        "preview" : "0",
+        "totalObservations" : "6522",
+        "variables" : "5"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

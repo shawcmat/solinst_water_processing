@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1577147282262.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "1FE87898",
+    "lastKnownWriteTime" : 8389754659302220320,
+    "last_content_update" : 1577147282262,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "3D19CD29",
+        "caption" : "sbdeep.subset.a",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=sbdeep.subset.a&cache_key=3D19CD29",
+        "displayedObservations" : 255483,
+        "environment" : "",
+        "object" : "sbdeep.subset.a",
+        "preview" : 0,
+        "totalObservations" : 255483,
+        "variables" : 5
+    },
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

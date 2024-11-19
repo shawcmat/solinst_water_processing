@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1577150054132.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "4C16D3F8",
+    "lastKnownWriteTime" : 8227866822883570511,
+    "last_content_update" : 1577150054132,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "65F12F3D",
+        "caption" : "finaltesteel",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=finaltesteel&cache_key=65F12F3D",
+        "displayedObservations" : 354338,
+        "environment" : "",
+        "object" : "finaltesteel",
+        "preview" : 0,
+        "totalObservations" : 354338,
+        "variables" : 5
+    },
+    "relative_order" : 9,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

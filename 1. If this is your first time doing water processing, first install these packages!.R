@@ -1,0 +1,6 @@
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("data.table")
+install.packages('remotes')
+install.packages('readxl')
+remotes:::install_github('acgoodman/wlTools')

@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1577147934675.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "672F2318",
+    "lastKnownWriteTime" : 7308604914264011873,
+    "last_content_update" : 1577147934675,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "E2D36107",
+        "caption" : "sb.eel.1",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=sb.eel.1&cache_key=E2D36107",
+        "displayedObservations" : 17768,
+        "environment" : "",
+        "object" : "sb.eel.1",
+        "preview" : 0,
+        "totalObservations" : 17768,
+        "variables" : 5
+    },
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

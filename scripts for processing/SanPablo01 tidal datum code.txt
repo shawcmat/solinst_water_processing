@@ -1,0 +1,379 @@
+#######################################################################################################################
+# This script calculates tidal datums from compensated water level data.  Mean high water (MHW), mean higher high water
+# (MHHW), mean tide line (MTL), maximum tide height (MAT) and mean conductivity are calculated.
+# Input is a csv of compensated water level data and logger height.  Columns of water level, conductivity and DateTime
+# must be identified.  If you are coming from the baro_compensation script, start at line 20.  If you import a compensated
+# file be sure to change the level, datetime and conductivity columns
+# Kevin Buffington   4/21/2013
+#######################################################################################################################
+
+##Data preparation
+
+################################################3
+### Use this to read in multiple compensated files, bind them together in one dataset, and calculate tidal datums
+data = read.csv(file.choose(), header=T)
+#data2 = read.csv(file.choose(), header=T)
+#data3 = read.csv(file.choose(), header=T)
+#data4 = read.csv(file.choose(), header=T)
+#data5 = read.csv(file.choose(), header=T)
+#data6 = read.csv(file.choose(), header=T)
+#data = rbind(data1, data2, data3, data4,data5, data6)
+################################################3########
+#data=data1
+data=as.matrix(data)
+attach(data)
+head(data)
+
+library(RJSONIO)	
+library(plyr)
+library(tcltk)
+
+a = c('San Diego Bay, CA', 9410170, 0.77, 1.387, 1.613, 'Sweetwater')
+b = c('San Diego Bay, CA', 9410170, 0.77, 1.387, 1.613, 'Tijuana')
+c = c('LA Outer Harbor, CA', 9410660, .806, 1.387, 1.612, 'Seal Beach')
+d = c('LA Outer Harbor, CA', 9410660, .806, 1.387, 1.612, 'Newport')
+e = c('LA Outer Harbor, CA', 9410660, .806, 1.387, 1.612, 'Pt. Mugu')
+f = c('Port San Luis, CA', 9412110, 0.839, 1.384, 1.599, 'Morro')
+g = c('San Francisco, CA', 9414290, 0.988, 1.613, 1.798,'San Francisco Bay')
+h = c('Point Reyes, CA', 9415020, 0.95, 1.546, 1.75, 'Bolinas')
+i = c('Crescent City, CA', 9419750, 1.024, 1.784, 1.979, 'Humboldt Bay')
+j = c('Charleston, Coos Bay, OR', 9432780, 1.101, 1.968, 2.171, 'Bandon')
+k = c('Charleston, Coos Bay, OR', 9432780, 1.101, 1.968, 2.171, 'Coos Bay')
+l = c('Toke Pt. Willapa Bay, WA', 9440910, 1.203, 2.244, 2.470, 'Willapa Bay')
+m = c('Toke Pt. Willapa Bay, WA', 9440910, 1.203, 2.244, 2.470, 'Grays Harbor')
+n = c('Port Angeles, WA', 9444090, 1.158, 1.858, 2.024, 'Padilla')
+o = c('Seattle, WA', 9447130, 1.316, 2.483, 2.747, 'Nisqually')
+p = c('Seattle, WA', 9447130, 1.316, 2.483, 2.747, 'Skokomish')
+q = c('Seattle, WA', 9447130, 1.316, 2.483, 2.747, 'Port Susan Bay')
+
+tidal_datums = rbind(a,b,c,d, e, f, g, h, i, j, k, l, m, n, o, p, q)
+tidal_datums=as.data.frame(tidal_datums)
+colnames(tidal_datums) = c("NOAA Station", 'Station_ID', 'MTL', 'MHW', 'MHHW', 'CERCC_Site')
+tidal_datums
+
+#####Use this if coming from baro_compensation script  ######################################################################
+
+#data=as.matrix(wl.new)  #Include if coming from baro_compensation, otherwise comment out
+
+###############################################################################################################################
+#### The CERCC site you are processing data from needs to be named. Enter the name exactly how it appears in the 'tidal_datums'
+#### table.
+#### If there isn't a separate baro level column, assign 'baro_level' to the same column as the water level
+#### Logger height is required.                              								                                          	 ######			
+#### This is used to remove any false peaks created when the logger is exposed to air and the pressure is fluxuating     ######
+#### Water levels are assumed to be in column 4 of datafile. Change 'level' to the correct column number if different    ######
+###############################################################################################################################
+
+CERCC_site = 'San Francisco Bay'
+wl_level = 3  # The column with the raw pressure from the water logger
+baro_wl_level = 3   ## The column with the baro (temp) compensated levels
+conductivity = NA
+datetime = 2   # 2 if coming from baro_compensation script, 3 if importing a processed baro compensation script
+
+logger.height = 1.2527  ##comment out if coming from baro_compensation script within the same R session-- is already set
+
+###############################################################################################################################
+year = 2010:2014
+
+td = tidal_datums[grep(CERCC_site, tidal_datums$CERCC_Site),]
+td_station_id = td$Station_ID 
+td_MTL = as.numeric(levels(td$MTL))[td$MTL]
+td_MHW = as.numeric(levels(td$MHW))[td$MHW]
+td_MHHW = as.numeric(levels(td$MHHW))[td$MHHW]
+
+
+
+
+##Remove columns with NA
+#data = data[,colSums(is.na(data))<nrow(data)]
+
+##Subset data to remove levels with 
+#data = subset(data, as.numeric(data[,level])>-2 & as.numeric(data[,level])<5)
+min = logger.height+0.1
+data=cbind(data,seq(1,nrow(data),1)) #add row counter to data table
+row_count = ncol(data)
+
+
+
+# Finds peaks from water level column by finding the max value around a moving window of 90 minutes
+peaks = matrix(NA, nrow=nrow(data), ncol=ncol(data))
+count = 1
+for(i in 30:(nrow(data)-30)){
+  
+  now = as.numeric(data[i,wl_level])
+  before = max(as.numeric(data[(i-1):(i-30),wl_level]))	
+  after =max(as.numeric(data[(i+1):(i+30),wl_level]))
+  if(now > before & now > after & now > min){
+    peaks[count,] = data[i,]
+    count=count+1
+  }
+}
+
+
+data.df = as.data.frame(data)
+
+# Calculated MHW and mean conductivity using peak water level
+peaksMHW_baro= as.data.frame(peaks[complete.cases(peaks),])
+peaksMHW_baro[,datetime] = as.POSIXct(strptime(peaksMHW_baro[,datetime], "%m/%d/%Y %H:%M")) #reads in Date Time
+data.df[,datetime] = as.POSIXct(strptime(data.df[,datetime], "%m/%d/%Y %H:%M")) #reads in Date Time
+
+peaksMHW = matrix(NA, ncol=ncol(data), nrow=nrow(peaksMHW_baro))
+for(i in 1:nrow(peaksMHW_baro)){
+  sub_data = subset(data.df, abs(as.numeric(data.df[,datetime])-as.numeric(peaksMHW_baro[i,datetime])) < 1800)  #1800
+  sub_data = as.matrix(sub_data)
+  peaksMHW[i,] = subset(sub_data, as.numeric(sub_data[, wl_level]) == max(as.numeric(sub_data[, wl_level])))
+}
+
+
+#############################################################
+####Downloads NOAA water logger data from control stations
+#############################################################
+
+NOAA_peaks <- data.frame()
+for(i in 1:length(year)){
+  #  for(j in 1:length(month)){
+  yr=year[i]
+  #      mo=month[j]
+  #      d=day[j]
+  # address = paste("http://tidesandcurrents.noaa.gov/api/datagetter?product=water_level&application=NOS.COOPS.TAC.WL&station=",station,"&begin_date=",yr,mo,"01&end_date=",yr,mo,d,"&datum=NAVD&units=metric&time_zone=LST&format=json",sep="")
+  address = paste("http://tidesandcurrents.noaa.gov/api/datagetter?product=high_low&application=NOS.COOPS.TAC.WL&station=",td_station_id,"&begin_date=",yr,"0101&end_date=",yr,"1231&datum=NAVD&units=metric&time_zone=LST&format=json",sep="")
+  #Try to download 2014 data; may not be available
+  #address2 = paste("http://tidesandcurrents.noaa.gov/api/datagetter?product=high_low&application=NOS.COOPS.TAC.WL&station=",station,"&begin_date=20140101&end_date=20140120&datum=MTL&units=metric&time_zone=LST&format=json",sep="")
+  
+  conn <- url(address)
+
+  raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+
+  
+  if(is(raw.data,"try-error")){
+    Sys.sleep(5)
+    raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+ 
+    if(is(raw.data,"try-error")){
+      raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+
+      Sys.sleep(5)
+      if(is(raw.data,"try-error")){
+        raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+   
+        Sys.sleep(5)
+        if(is(raw.data,"try-error")){
+          raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+
+          Sys.sleep(5)
+          if(is(raw.data,"try-error")){
+            raw.data = try(readLines(conn, n=-1L, ok=TRUE))
+   
+          }
+        }
+      }
+    }
+  }
+  # Convert to a JSON
+  tide.data <- fromJSON(paste(raw.data, collapse=""))
+
+  close(conn)
+
+  NOAA_peaks <- rbind(NOAA_peaks, ldply(tide.data$data, fun=NULL))  # c(airport.code, x$date, x$pressurem)))
+}
+
+#hdwd3 = rbind(hdwd,hdwd2)
+
+site_peaks = (peaksMHW)
+#Function to match two sets of water level peak data by time, with a 4 hour buffer. Inputs two data frames,
+#returns a single data frame. 
+match.dates = function(site_peaks, NOAA_peaks){
+  out = data.frame(matrix(nrow=nrow(site_peaks),ncol=5))
+  site_peaks = as.data.frame(site_peaks)
+  site_peaks[,datetime] = as.POSIXct(strptime(site_peaks[,datetime], "%Y-%m-%d %H:%M:%S")) #reads in Date Time
+  NOAA_peaks[,1] = as.POSIXct(strptime(NOAA_peaks[,1], "%Y-%m-%d %H:%M")) #reads in Date Time
+  NOAA_peaks = NOAA_peaks[complete.cases(NOAA_peaks),]  #removes missing data from NOAA table
+  count =1  # 3926
+ # STOP=F
+  for(i in 1:nrow(site_peaks)){
+    found = F    
+    while(count < nrow(NOAA_peaks) & found==F ){
+     if(abs(as.numeric(NOAA_peaks[count,1]) - as.numeric(site_peaks[[i,datetime]])) < 10800){   #10800 seconds is 4 hours
+     #  STOP=T
+       out[i,] = c(strftime(NOAA_peaks[count,1]), NOAA_peaks[count,2:3], strftime(site_peaks[i, datetime]),as.matrix(site_peaks[[i,baro_wl_level]]) )
+       found=T  
+     } else {
+       count = count + 1
+     }            
+    }   
+  }
+  colnames(out) = c("NOAA_DT","NOAA_Level_NAVD_M","Tide","Site_DT","Site_Level_NAVD_M")
+  out2 = out[complete.cases(out),]
+  return(out2)
+}
+
+peaksMHW.df = as.data.frame(peaksMHW)
+matched_data = match.dates(peaksMHW.df, NOAA_peaks)
+n = names(matched_data)
+
+#all_site_datums = read.csv()
+#site = "MorroBay"
+
+#site_datums = subset(all_site_datums, all_site_datums$CERCC_Site == site)
+#MTL = site_datums[1,grep('MTL',colnames(site_datums))]
+#NAVD = site_datums[1,grep('NAVD',colnames(site_datums))]
+#MHW = site_datums[1,grep('MHW',colnames(site_datums))]
+#MHHW = site_datums[1,grep('MHHW',colnames(site_datums))]
+
+matched_data[,6] = as.numeric(matched_data$Site_Level_NAVD_M) - as.numeric(matched_data$NOAA_Level_NAVD_M) 
+colnames(matched_data) = c(n, "Difference")
+higherhigh = subset(matched_data, matched_data$Tide == "HH")
+high = subset(matched_data, matched_data$Tide == "H ")
+
+high_dif = mean(as.numeric(high$Difference))
+higherhigh_dif = mean(as.numeric(higherhigh$Difference))
+
+final_MHW = as.numeric(td_MHW) + high_dif 
+final_MHHW = as.numeric(td_MHHW) + higherhigh_dif
+
+#final_MHW   #in NAVD88
+#final_MHHW  #in NAVD88
+datum_ratio = final_MHW/final_MHHW
+
+#mean(as.numeric(higherhigh$Site_Level_NAVD_M))  #old method
+#mean(as.numeric(matched_data$Site_Level_NAVD_M))        #old method
+
+MAT = max(as.numeric(matched_data$Site_Level_NAVD_M))
+#MTL calculation by ratio method
+# Use for all site EXCEPT those in San Francisco Bay, Humboldt Bay, Willapa Bay, and Nisqually
+if(CERCC_site == 'San Francisco Bay'){
+  MTL = datum_ratio * 1.101317
+} else if(CERCC_site == 'Humboldt Bay'){
+  MTL = datum_ratio * 1.135928
+} else if(CERCC_site == 'Willapa'){
+  MTL = datum_ratio * 1.32746
+} else if (CERCC_site == 'Nisqually'){
+  MTL = datum_ratio * 1.455921
+}else{
+  MTL = 6.44496 * datum_ratio - 4.74901
+}
+
+
+final_out = as.data.frame(cbind(c('MTL', 'MHW', 'MHHW', 'MAT'),c(round(MTL,4),round(final_MHW,4), round(final_MHHW,4), round(MAT,4))))
+colnames(final_out) = c(CERCC_site, 'NAVD88_m')
+final_out
+
+#######################################################################################################
+##          END SCRIPT      ##
+#######################################################################################################
+
+#######################################################################################################
+
+#######################################################################################################
+
+#######################################################################################################
+
+
+
+
+
+
+
+#peaksCompare = peaksMHW
+MHW_old = mean(as.numeric(as.matrix(peaksMHW[,baro_wl_level])))
+Condo = mean(as.numeric(peaksMHW[,conductivity]))
+
+# Calculated MHHW and MAT
+peaksMHHW = matrix(NA, nrow=nrow(peaksMHW), ncol=ncol(peaksMHW))
+count = 1
+j=2
+while(j < nrow(peaksMHW)){
+  timedif = as.POSIXct(strptime(peaksMHW[j,datetime], "%m/%d/%Y %H:%M")) - as.POSIXct(strptime(peaksMHW[j-1,datetime], "%m/%d/%Y %H:%M"))
+  if(timedif < 14 & !is.na(peaksMHW[j,1])){
+    if(as.numeric(peaksMHW[j,level]) > as.numeric(peaksMHW[(j-1), level])){
+      peaksMHHW[count,] = peaksMHW[j,]
+    } else {
+      peaksMHHW[count,] = peaksMHW[j-1,]
+    }
+    j = j+1
+    count=count+1
+  }
+  j=j+1
+}
+
+peaksMHHW2 = peaksMHHW[complete.cases(peaksMHHW),]
+MHHW = mean(as.numeric(peaksMHHW2[,level]))
+MAT = max(peaksMHHW2[,level])
+
+MHW
+MHHW
+Condo
+MAT
+
+#highp = matrix(NA, nrow=nrow(peaks), ncol=(ncol(peaks)+2))
+#highp[,1:ncol(peaks)]=peaks
+#highp
+
+############## MTL calculation, based on high tide time ##############################################################
+# Finds the time of MTL by comparing the time of sequential high tide peaks and dividing the time difference by 4    #
+# MTL time is found on both sides of each peak                                                                       #
+######################################################################################################################
+peaks2=matrix(NA, ncol=(ncol(peaks)+4), nrow=nrow(peaks))
+peaks2[,1:(ncol(peaks))]=peaks
+
+peaktime = (ncol(peaks2)-3)
+lowtidetime = (ncol(peaks2)-2)
+mtltime = (ncol(peaks2)-1)
+
+peaks2[,peaktime] = as.POSIXct(strptime(peaks[,datetime], "%m/%d/%Y %H:%M"))
+for(j in 1:(nrow(peaks2)-1)){
+  peaks2[j,lowtidetime] = (as.numeric(peaks2[j+1,peaktime])-as.numeric(peaks2[j,peaktime]))/2
+}
+
+peaks2[,mtltime] = as.numeric(peaks2[,peaktime]) + (as.numeric(peaks2[,lowtidetime])/2)
+peaks2[,mtltime+1] = as.numeric(peaks2[,peaktime]) - (as.numeric(peaks2[,lowtidetime])/2)
+
+data2 = matrix(NA, ncol=(ncol(data)+2), nrow=nrow(data))
+data2[,1:ncol(data)]=data
+data2[,(ncol(data2)-1)] = as.POSIXct(strptime(data2[,datetime], "%m/%d/%Y %H:%M"))
+mtllevel = ncol(data2)
+
+##Works!!
+pb = tkProgressBar(title = "Overall Progress", min = 0, max = nrow(data2), width = 300)
+timedif=1000
+timedif2=1000
+
+peaks.sub = subset(peaks2, !is.na(peaks2[,7]))
+
+for(k in 1:(nrow(peaks.sub))){  
+  #Subset all the wl data around each peak, 20 hours
+  d.sub = subset(data2, as.numeric(data2[,peaktime]) < as.numeric(peaks.sub[[k,peaktime]])+46800 & as.numeric(data2[,peaktime]) > as.numeric(peaks.sub[k,peaktime])-46800)
+  for(l in 1:(nrow(d.sub)-1)){  
+    peak.mtl.time= as.numeric(peaks.sub[k,mtltime+1])
+    peak.mtl.time2= as.numeric(peaks.sub[k,mtltime])
+    
+    timedif = abs(peak.mtl.time - as.numeric(d.sub[l,(ncol(d.sub)-1)])) #for each row in the data subset, find the dif between peak.mtl.time and the data.time
+    timedif2 = abs(peak.mtl.time - as.numeric(d.sub[(l+1),(ncol(d.sub)-1)])) #for each row in the data subset, find the dif between peak.mtl.time and the next data.time
+    timedif.b = abs(peak.mtl.time2 - as.numeric(d.sub[l,(ncol(d.sub)-1)])) #for each row in the data subset, find the dif between peak.mtl.time and the data.time
+    timedif2.b = abs(peak.mtl.time2 - as.numeric(d.sub[(l+1),(ncol(d.sub)-1)])) #for each row in the data subset, find the dif between peak.mtl.time and the next data.time
+    
+    if(timedif<460 & !is.na(timedif) & timedif <= timedif2){
+        data2[as.numeric(d.sub[l,row_count]),ncol(data2)] = as.numeric(data2[as.numeric(d.sub[l,row_count]),level])
+      #l=(nrow(d.sub)-1) #escape out of for loop
+    }		
+    if(timedif.b<460 & !is.na(timedif.b) & timedif.b <= timedif2.b){
+        data2[as.numeric(d.sub[l,row_count]),ncol(data2)] = as.numeric(data2[as.numeric(d.sub[l,row_count]),level])
+      #l=(nrow(d.sub)-1) #escape out of for loop
+    }  
+  }
+ 
+  setTkProgressBar(pb, k, label=paste( round(k/(nrow(peaks.sub))*100, 0), "% done."))
+}
+close(pb)
+
+mtl = data2[,ncol(data2)]
+mtl2 = mtl[complete.cases(mtl)]
+mtl3 = subset(mtl2,mtl2<5 & mtl2>logger.height+logger.height*.1)
+MTL = mean(as.numeric(mtl3))
+
+# Print processed data
+MTL
+MHW
+MHHW
+Condo
+MAT

@@ -1,0 +1,405 @@
+---
+title: "Water Processing"
+author: "Scott F. Jones"
+creation date: "December 2019"
+last updated: "Michelle D'Aguillo June 2024"
+output: html_document
+
+## Purpose
+
+#This document outlines the processing of water level, temperature and salinity data for USGS WERC Davis Field Station water logger deployments, for the Karen Thorne group.
+
+#This processing uses a canned script to process water level data, but needs inputs to know where to look for the information it needs (primarily entered in step 2). It is recommended, although not required, to run steps 1-5 at the same time 
+---
+
+#################################Step 1 - Load packages, set working directory, and load functions
+
+In general, you will not need to make any adjustments to this section of code, but you may need to change the path for line 27 if your computer does not read the folder on the Z drive.
+Make sure the final output of this section is the correct working directory path (check in the console after running this chunk)
+```{r setup, include=FALSE}
+remove(list=ls())
+library(wlTools)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(readxl)
+
+mydirectorypath = "Z:/Davis/Thorne/Data Files/3 Projects/8 Water Quality"
+setwd(mydirectorypath)
+
+# standardize tower baro data
+standardize.tower.baro = function(baro_path) {
+  tower.csv <- read.csv(baro_path, stringsAsFactors = FALSE)
+  results <- tower.csv %>% 
+    transmute(time = as.POSIXct(Time, format = "%m/%d/%Y %H:%M", tz = "Etc/GMT+8"), 
+              baro_pressure = air_pressure, 
+              temperature = air_temp)
+  results
+}
+
+# standardize solinst (UPDATED 8-2022 SFJ)
+standardize.solinst = function (level_path, programmed.h2o.density = 1000) {
+  if (programmed.h2o.density < 900 | programmed.h2o.density >  1100) 
+    stop("H2O density should be between 950 and 1050 kg/m^3")
+  clean.solinst <- function(level_path) {
+    #solinst.headers <- readLines(level_path, n = 25)
+    solinst.headers <- readLines(level_path)
+    header.count = suppressWarnings(min(grep("^Date,Time,.*", solinst.headers)) - 1)
+    #solinst.csv <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count)
+    solinst.csv <- read.csv(level_path, stringsAsFactors = FALSE)
+    results <- solinst.csv %>% 
+      filter(LEVEL >= 0, LEVEL <= 20) %>% 
+      transmute(time = if (any(grepl("M", Time))) as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")
+                       else as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8"), 
+                level = if (max(LEVEL) < 9.5) LEVEL + 9.5
+                        else LEVEL, 
+                temperature = TEMPERATURE, 
+                conductivity = if (any(names(solinst.csv) == "CONDUCTIVITY")) CONDUCTIVITY
+                               else NA)
+    rows.excluded <- sum((solinst.csv$LEVEL < 0) | (solinst.csv$LEVEL > 20), na.rm = TRUE)
+    if (rows.excluded > 0) 
+      warning(sprintf("%i rows excluded for levels outside of [0, 20]", rows.excluded))
+    if (any(names(solinst.csv) == "CONDUCTIVITY") && any(solinst.csv$CONDUCTIVITY > 100)) 
+      warning("Specific conductance values greater than 100, suggesting logger error.")
+    if (nrow(as.data.frame(unique(results$time))) < nrow(results))
+      warning("Time data not processed correctly. Check .csv Time column for duplicates and formatting.")
+    results
+  }
+  unit.conversion <- function(solinst.data, programmed.h2o.density) {
+    solinst.data %>% 
+      mutate(total_pressure = level * programmed.h2o.density * 9.80665/1000, 
+             salinity = 0.012 + (-0.2174 * ((conductivity)/53.087)^0.5) + (25.3283 * ((conductivity)/53.087)^1) + 
+               (13.7714 * ((conductivity)/53.087)^1.5) + (-6.4788 * ((conductivity)/53.087)^2) + (2.5842 * ((conductivity)/53.087)^2.5)) %>% 
+      select(-level, -conductivity)
+  }
+  solinst.data <- clean.solinst(level_path)
+  unit.conversion(solinst.data, programmed.h2o.density)
+}
+
+# total pressure to water level above sensor (UPDATED 8-2022 SFJ)
+tp.to.wlas = function (logger.data, baro.data, h2o.density) 
+{
+  baro.compensation <- function(logger.data, baro.data) {
+    logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% 
+      data.table(key = "time")
+    baro.dt <- data.table(filter(baro.data, !is.na(time), !is.na(baro_pressure)), key = "time")
+    logger.baro.dt <- baro.dt[logger.dt, roll = "nearest"]
+    logger.baro.dt %>% 
+      mutate(water_pressure = total_pressure - baro_pressure) %>% 
+      select(-total_pressure, -baro_pressure)
+  }
+  level.conversion <- function(logger.data, h2o.density) {
+    logger.data %>% 
+      mutate(water_level_above_sensor = water_pressure * 1000/(h2o.density * 9.80665)) %>% 
+      select(-water_pressure)
+  }
+  logger.data.columns <- c("time", "total_pressure")
+  baro.data.columns <- c("time", "baro_pressure")
+  if (!length(intersect(logger.data.columns, colnames(logger.data))) == length(logger.data.columns)) 
+    stop("Logger data must have columns: \"time\", \"total_pressure\"")
+  if (!length(intersect(baro.data.columns, colnames(baro.data))) == length(baro.data.columns)) 
+    stop("Baro data must have columns: \"time\", \"baro_pressure\"")
+  if (!any(class(logger.data$time) == "POSIXct")) 
+    stop("Logger data time must be POSIXct")
+  if (!any(class(baro.data$time) == "POSIXct")) 
+    stop("Baro data time must be POSIXct")
+  if (h2o.density < 900 || h2o.density > 1100) 
+    stop("H2O density should be between 950 and 1050 kg/m^3")
+  if (min(logger.data$time) < min(baro.data$time) | max(logger.data$time) > max(baro.data$time)) 
+    warning(sprintf("URGENT: Time range for logger data (%s - %s) is not contained within time range for baro data (%s - %s). Data will be incorrectly compensated.", 
+                    format(min(logger.data$time), "%Y-%m-%d %H:%M"), 
+                    format(max(logger.data$time), "%Y-%m-%d %H:%M"), 
+                    format(min(baro.data$time), "%Y-%m-%d %H:%M"), 
+                    format(max(baro.data$time), "%Y-%m-%d %H:%M")))
+  if (min(na.omit(logger.data$total_pressure)) < 90 | max(na.omit(logger.data$total_pressure > 150)))
+    warning("Logger data total pressure not contained in range 90:150. Check units (should be kPa).")
+  if (min(na.omit(baro.data$baro_pressure)) < 90 | max(na.omit(baro.data$baro_pressure > 150)))
+    warning("Baro pressure not contained in range 90:150. Check units (should be kPa).")
+  logger.data %>% baro.compensation(baro.data) %>% level.conversion(h2o.density)
+}
+
+getwd()
+
+```
+
+
+#################################Step 2 - Set inputs for the current session
+
+Read in appropriate files for this particular session and assign all the appropriate folder names to export your processed files-- this chunk is where you will need to make adjustments everytime you process a new set of data.
+
+If you run some of the other steps below on a different day, you may need to come back to this section and re-run a subset of these inputs.
+```{r Read in files and perform conversion}
+setwd(mydirectorypath)
+
+# Enter the file path and csv name for the raw baro data. 
+# Location: This will always be in the "1 Raw data/Baro" folder for your site
+# Specifically: replace "SITE.FOLDER" and "CSV.NAME" as necessary, below:
+baro_path = "./1 Site data/SITE.FOLDER/1 Raw data/Baro/FILE.NAME.csv"
+
+# Enter the type of baro data you want to use, "logger" or "tower"
+# To find this information: If we are collecting data from an external source, it will be deemed a tower--this includes airport datasets. The name "tower" may also be specified in the baro_path file name (i.e., "UCBTower). If we deployed a logger and are collecting data from a logger, you will put "logger"
+# If processing throws an error, you may have the wrong logger type
+baro_type = "BARO.TYPE"
+
+# Enter the file path and csv name for the raw water level data you will imported to process. 
+# Location: This will always be in the "1 Raw data" folder for your site.
+# Specifically: replace "SITE.FOLDER" and "FILE.NAME.csv" as necessary, below:
+level_path = "./1 Site data/SITE.FOLDER/1 Raw data/FILE.NAME.csv"
+
+#Enter the start and end dates for the raw water level data you are processing (these should be included in the file name on line 147)
+level_start = "YEAR-MONTH-DAY" #format: "2021-09-30"
+level_end = "YEAR-MONTH-DAY"
+
+#Replace "year" below to be one year after level_end. For example, if level_end is "2021-09-30", change year below to "2022"
+year_end = "YEAR-01-01"
+
+# Enter the type of water level logger, "hobo" or "solinst" 
+# *This will almost always be solinst as of June 2024
+# If processing throws an error, you may have the wrong logger type
+level_type = "solinst"
+
+# Enter the logger name 
+# Location: Check the water.accessory.csv file if you are unsure. This file is located in the  "2 processing & analysis" folder in the main "8 Water Quality" folder--it is NOT site specific.
+# The logger name will be in the first column and it will almost always be the site name.
+logger_name = "LOGGER.NAME"
+
+# Enter the file path and R object for the processed water level data that you will create.
+# Location: This will always go to the "2 Processed data" folder for your site, and the file name should include your site name and appropriate dates.
+# Specifically: replace "SITE.FOLDER" and "R.NAME" below, as appropriate:
+level_processed_path = "./1 Site data/SITE.FOLDER/2 Processed data/R.NAME.Rds"
+
+#Before you process your data, you will locate the long term QAQCed data set for the site you are working on
+#This will be in the QAQC folder for your site
+# Specifically: replace "SITE.FOLDER" and "R.NAME.Rds" below, as appropriate:
+level.QAQC.path = "./1 Site data/SITE.FOLDER/3 QAQCed data/R.NAME.Rds"
+
+#Replace "YEAR" below to be one year before the earliest date in level.QAQC.path. For example, if the long term data begins on 2021.08.30, change "YEAR" to "2020"
+pre_year_start = "YEAR-12-31"
+#Below, add the exact start date for the long-term QAQCed data on line 174
+exact_start_date = "YEAR-MONTH-DAY"
+
+# Enter file path and R object for the new working water level file you will create - this file will combine your new data (identified in level_path, line 147 above) with the larger, older QAQCed file (identified in level.QAQC.path, line 174 above)
+# *The name should include full range of dates (old QAQC file + your current file) followed by "_workingfile"
+# Specifically: replace "SITE.FOLDER","SITE.NAME", START.DATE" & "END.DATE" below, as appropriate:
+level.working.path = "./1 Site data/SITE.FOLDER/3 QAQCed data/SITE.NAME_START.DATE_END.DATE__workingfile.Rds"
+
+# Enter the file path and R object name for where you will export the final QAQCed file !!
+# This will have the same site and date data as above (line 184) but will end in "QAQC_Final" 
+# Specifically: replace "SITE.FOLDER", "START.DATE" & "END.DATE" below, as appropriate:
+# OR (easier!) you can copy line 184 and change "_workingfile" to "_QAQC_Final"
+qaqc.path = "./1 Site data/SITE.FOLDER/3 QAQCed data/SITE.NAME_START.DATE_END.DATE_QAQC_Final.Rds"
+
+```
+
+
+#################################Step 3 - Convert microsiemens to millisiemens
+
+If your conductivity values are in us (microsiemens), run this section to convert to millisiemens (ms)
+*This will be the case for (most? all?) new files worked with after June 2024.
+The only change you need to make in this section is to change the location of level_path_ms on line 217.
+**To do this, 1) change the folder name and b) copy the file name from level_path on line 147 3) add "_mS" to the end of the file name 4) Check that the new mS file will be exported to the 1 Raw mS data folder.
+```{r Read in files and perform conversion}
+setwd(mydirectorypath)
+inputheader = read.csv(level_path)
+
+removeheader <- function(level_path) {
+    headers <- readLines(level_path, n = 25)
+    header.count = suppressWarnings(min(grep("^Date,Time,.*", headers)) - 1)
+    inputdata <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count)
+    inputdata = data.frame(inputdata)
+    .GlobalEnv$inputdata = inputdata
+}
+
+removeheader(level_path = level_path)
+outputdata = inputdata
+outputdata$CONDUCTIVITY = outputdata$CONDUCTIVITY/1000
+
+level_path_ms = "./1 Site data/SITE.FOLDER/1 Raw data/FILE.NAME_ms.csv"
+
+write.csv(outputdata,row.names=FALSE,level_path_ms)
+#Line 219 WILL let you overwrite an existing file of the same name, so make sure you change the folder name and file name for export, otherwise you could potentially overwrite the original raw data file!
+
+```
+
+#################################Step 4 - Water level processing
+
+You are now ready to run the water level processing! You do not need to make any adjustments to this section of code, but check that the water accessory csv is updated with the correct elevation for the deployment you are processing (elevation is found in the water metadata).
+
+
+**If, for whatever reason, you did NOT perform step 3 above (potentially because you are using a file that is already converted to millisiemens), type level_path_ms = level_path in the console below before running this section.
+```{r water level process}
+setwd(mydirectorypath)
+
+# read in and process baro data
+baro.fxn = function(baro_type) {
+  if (baro_type == "logger") standardize.baro(baro_path)
+  else (standardize.tower.baro(baro_path))
+}
+
+baro = baro.fxn(baro_type)
+
+# Read in and process water level data
+level.fxn = function(level_type) {
+  if (level_type == "hobo") standardize.hobo(level_path_ms)
+  else standardize.solinst(level_path_ms)
+} 
+
+level = level.fxn(level_type)
+
+# Pull in water accessory information look-up table
+setwd(mydirectorypath)
+water_accessory = read.csv("./2 Processing & analysis/water_accessory.csv")
+
+# Convert total pressure to water level above sensor using local water density & barometric pressure
+level_barocomp = tp.to.wlas(level, baro, water_accessory$water_density[water_accessory$logger==logger_name])
+
+# Add final water level NAVD88 column by adding sensor elevation in NAVD88 to water level above sensor
+level_barocomp$water_level_NAVD88 = level_barocomp$water_level_above_sensor + 
+  water_accessory$sensor_navd88[water_accessory$logger==logger_name]
+
+# Re-name temperature columns to be more clear
+final_level = level_barocomp %>%
+  rename(water_temp = i.temperature, air_temp = temperature)
+
+# Export processed dataset
+saveRDS(final_level, level_processed_path)
+```
+
+#################################Step 5 - Combine your newly processed data with the long term site dataset.
+You do not need to make any changes to this chunk of code. Line 284 will allow you to view the newly merged file--take a look at it to make sure there you are seeing actual data--if you are seeing many OR all NAs, that may mean you imported the wrong file for level_longterm or level_processed.
+
+If you are running this step on a different day from when you ran step 2, you will need to rerun inputs for:
+  -level_processed_path (line 169)
+  -level.QAQC.path (line 174)
+  -level.working.path (line 184)
+
+```{r combine multiple files for qaqc}
+setwd(mydirectorypath)
+
+# Combine newly processed data with historic QAQCed data
+level_processed = readRDS(level_processed_path)
+level_longterm = readRDS(level.QAQC.path)
+combined_level = bind_rows(level_longterm, level_processed)
+
+View(combined_level)
+
+# Export updated long-term dataset
+saveRDS(combined_level, level.working.path)
+
+```
+#################################Step 6 - Initial data visualization 
+
+You will be visualizing the latest processed data to search for problems. "Problems" include any outlier data points, especially right before or after the logger was deployed (but it was already recording data), as well as any outliers throughout the time series. DON'T RUN THIS SECTION AS A CHUNK - please run it line by line to view each plot separately.
+
+You will need to look at all of the following variables: (1) water temp, (2) salinity, and (3) water level NAVD88
+Begin with y=water_temp. Once you finish examining the water_temp data, change the "y =" to salinity, and then water_level_NAVD88
+
+**If you are running this step on a different day from when you ran step 2, you will need to rerun inputs for:
+  -level.working path (line 184)
+  -pre_year_start (line 177)
+  -year_end (line 154)
+  -level_start (line 150)
+  -level_end (line 151)
+
+-The code on line 315 allows you to zoom in on the y-axis after you adjust the lower and upper y axis limits; it is not necessary to run if you are able to easily visualize any problems using the first ggplot script on line 302.
+
+-The code on line 318 asks you to zoom in on the x-axis to only examine data from the new dates you are processing. You should definitely run this line to allow you to more clearly visualize outliers in the new batch of data.
+```{r data visualization}
+setwd(mydirectorypath)
+# load working file for visualization
+level_working = readRDS(level.working.path)
+
+# Begin with y = water_temp
+# replace y = water_temp with the other 2 variables (salinity, water_level_NAVD88) when you are ready 
+ggplot(data = subset(level_working, time > pre_year_start & time < year_end), aes(x = time, y = water_temp)) + geom_line()
+
+# If you would like to find movement in the baseline, you can zoom in to that part of the y axis using ylim
+# change LOWER and UPPER to the boundaries you would like to examine
+#ggplot(data = subset(level_working, time > pre_year_start & time < year_end), aes(x = time, y = water_temp)) + geom_line() + ylim(LOWER_VALUE, UPPER_VALUE)
+
+#Zoom into the x axis to specifically examine data from the new dates being processed
+ggplot(data = subset(level_working, time > level_start & time < level_end), aes(x = time, y = water_temp)) + geom_line()
+```
+
+When problems are found during this process, they need to be recorded in the READ_ME.txt file associated with each site. For example, any errors in the processed data for Pet01 water level logger would go into "1 Site data/Petaluma/3 QAQCed data" folder. Make a note of the problem (e.g., data on 04/01/2015 is too high), and then sign the note with a date stamp and your initials.
+
+Write down extreme values, data gaps, and anything else concerning. Also note if the baseline shifted more than expected from RTK error (i.e., more than 5 cm) during the latest deployment (the baseline is the sensor elevation in NAVD88). Shifts in sensor elevation should be cross-referenced with the latest sensor elevation recorded in the field using RTK surveying. If they don't match, make a note in the READ_ME.txt. 
+
+Once any obvious errors or problems are identified, and any shift in baseline has been cross-referenced, go over the QAQC READ_ME.txt file with senior staff to make a plan for how to address each problem in the working file. 
+
+#################################Step 7 - Trim your data and eliminate any outliers
+
+In this section, there is very little pre-written code because you will manually replace outliers with "NA's" in the console. Remember, you should only be making replacements if you have clearly noted the errors in the QAQC READ_ME.txt file, and have cleared the proposed changes with senior staff. 
+
+See the SOP for more detailed notes about how to edit the working file, but some instructions are listed below:
+
+Your column numbers for replacement should be:
+Column 3 = water temp
+Column 4 = salinity
+Column 6 = water level NAVD88
+```{r QAQC replacements}
+#Run this to view your data frame and confirm column names are correct.
+View(level_working)
+#Additionally, keep the level_working data frame open so that you can view and confirm the correct row numbers to modify.
+```
+
+In general, you will use the following notation to make edits:
+
+level_working['rows to eliminate','columns to eliminate'] = NA
+
+You can use a ":" if rows or columns are consecutive, e.g., 1 to 5 = "1:5"
+You can use the combine ("c()") function in r if rows or columns are not consective, e.g., 1 & 5 = "c(1,5)"
+
+Example: replace a single salinity value (column 4) in row 600
+level_working[4,600] = NA
+
+Example, replace the last 20 rows of temperature, salinity, and water level data because the logger was out of the water
+level_working[951:970, c(3,4,6) = NA]
+
+Before you make any replacements in the console, carefully view your level working file to make sure you are replacing the correct rows and columns of data!!
+
+***If you are planning to complete this step over more than one day or go on to step 8 on a different day, make sure to export and save your changes:
+```{r Export edits}
+setwd(mydirectorypath) 
+
+# Export your changes
+saveRDS(level_working, level.working.path) 
+#If you get an error, level.working.path is found on line 184 in step 2
+
+```
+
+#################################Step 8 - Export your QAQCed data
+
+If you are running this step on the same day you ran step 2, you should be able to run this section without making any edits!
+
+If you are running this step on a different day from when you ran step 2, you will need to rerun inputs for:
+  -level.working.path (line 184)
+  -exact_start_date (line 179)
+  -logger_name (line 164)
+  -qaqc.path (line 190)
+
+```{r water level export}
+setwd(mydirectorypath)
+
+working.path = level.working.path #level.working.path is found on line 179
+start.date = exact_start_date #exact_start_date is found on line XXX
+logger.name = logger_name #Logger_name is found on line XX
+qaqc_path = qaqc.path #qaqc.path is found on line xx
+
+# read in working processed file
+data_working = readRDS(working.path)
+
+# read in accessory file
+water.accessory = read.csv("./2 Processing & analysis/water_accessory.csv")
+
+# trim water temperature and level data to remove any readings when water level is less than long-term cutoff
+data_working = data_working %>%
+  mutate(water.temp = ifelse(time >= start.date & water.level.NAVD88 < water.accessory$exposure.height[water.accessory$logger==logger.name], NA, water.temp), 
+         water.level.NAVD88 = ifelse(time >= start.date & water.level.NAVD88 < water.accessory$exposure.height[water.accessory$logger==logger.name], NA, water.level.NAVD88))
+# further trim any erroneous temperature readings below 0
+data_working$water.temp = ifelse(data_working$water.temp < 0, NA, data_working$water.temp)
+
+# save the final qaqced file
+saveRDS(data_working, qaqc_path)
+```
+

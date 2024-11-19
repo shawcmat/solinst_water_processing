@@ -1,0 +1,61 @@
+---
+title: "Water Processing"
+author: "Scott F. Jones"
+date: "July 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+remove(list=ls())
+#pacman::p_load(wlTools, dplyr)
+library(wlTools)
+library(dplyr)
+```
+
+## Purpose
+
+This document outlines the processing of water level and salinity data for USGS WERC Davis Field Station water logger deployments, for the Karen Thorne group.
+
+## Water processing
+
+This processing uses a canned script to process water data, but needs inputs to know where to look for the information it needs. We need to tell the script where to find barometric pressure data, raw water level data, and the site we are processing. 
+
+Edit the code below to match the current processing batch. When filled in, press the green triangle to run the code and process the data. 
+
+```{r water level}
+# enter the file path and csv name for the raw baro data. 
+# change "SITE.FOLDER" and "CSV.NAME" as necessary in example below
+baro.path = "../1 Site data/SITE.FOLDER/1 Raw data/Baro/CSV.NAME.csv"
+
+# enter the file path and csv name for the raw water level data. 
+# change "SITE.FOLDER" and "CSV.NAME"as necessary in example below
+level.path = "../1 Site data/SITE.FOLDER/1 Raw data/Water level/CSV.NAME.csv"
+
+# enter the type of water level logger, "hobo" or "solinst"
+logger.type = "hobo"
+
+# enter the logger name (check water.accessory.csv file if unsure)
+logger.name = "LOGGER.NAME"
+
+# enter the file path and R object name for the old long-term processed water level data.
+# change "SITE.FOLDER" and "R.NAME" as necessary in example below
+longterm.path.old = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R"
+
+# enter the file path and R object for the new long-term processed water level data that you will create.
+# end date should match the end date for the latest water level and baro data you just processed.
+# change "SITE.FOLDER" and "R.NAME" as necessary in example below
+longterm.path.new = "../1 Site data/SITE.FOLDER/2 Processed data/R.NAME.R"
+
+# run the script that processes the water data
+source("./scripts for processing/waterlevel_processing_modern.R")
+```
+
+## Salinity processing
+
+This processing uses a canned script to process salinity data, but needs inputs to know where to look for the information it needs. This step must be completed after water data for the same time period is processed, as We need processed water levels to remove salinity measurements when the sensor is dry.  
+
+Edit the code below to match the current processing batch. When filled in, press the green triangle to run the code and process the data.
+
+```{r salinity}
+```

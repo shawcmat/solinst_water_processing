@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1578600637732.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1628178132",
+    "id" : "E7361A85",
+    "lastKnownWriteTime" : 1578601529,
+    "last_content_update" : 1578601529,
+    "path" : "Z:/Thorne/Data Files/2 Climate Change/3 Projects/8 Water Quality/2 Processing & analysis/scripts for processing/HighWaterDifference.R",
+    "project_path" : "scripts for processing/HighWaterDifference.R",
+    "properties" : {
+        "cursorPosition" : "49,0",
+        "scrollLine" : "23"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

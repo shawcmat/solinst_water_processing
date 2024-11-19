@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1614130677520.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3686003900",
+    "id" : "6FD15AAC",
+    "lastKnownWriteTime" : 1589321073,
+    "last_content_update" : 1589321073,
+    "path" : "Z:/Thorne/Data Files/2 Climate Change/3 Projects/8 Water Quality/2 Processing & analysis/HighWaterDifference_AKTest.R",
+    "project_path" : "HighWaterDifference_AKTest.R",
+    "properties" : {
+        "cursorPosition" : "0,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

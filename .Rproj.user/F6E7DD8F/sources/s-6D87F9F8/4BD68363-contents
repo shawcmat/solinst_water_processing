@@ -1,0 +1,31 @@
+# read in and process baro data
+baro = standardize.baro(baro.path)
+
+# Read in and process water level data
+level.fxn = function(logger.type) {
+  if (logger.type == "hobo") {
+    standardize.hobo(level.path)
+  }
+  else {
+    standardize.solinst(level.path)
+  }
+} 
+level = level.fxn(logger.type)
+
+# Pull in water accessory information look-up table
+water.accessory = read.csv("water.accessory.csv")
+
+# Convert total pressure to water level above sensor using local water density & barometric pressure
+final_level = tp.to.wlas(level, baro, water.accessory$water.density[water.accessory$logger==logger.name])
+
+# Add final water level NAVD88 column by adding sensor elevation in NAVD88 to water level above sensor
+final_level$water.level.NAVD88 = final_level$water.level.above.sensor + 
+  water.accessory$sensor.navd88[water.accessory$logger==logger.name]
+
+# Re-name temperature columns to be more clear and remove salinity column
+final_level = final_level %>%
+  rename(water.temp = i.temperature, air.temp = temperature) %>%
+  select(-salinity)
+
+# Export processed dataset
+saveRDS(final_level, level.processed.path)

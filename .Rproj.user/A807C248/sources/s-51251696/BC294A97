@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1651252719846.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2939397654",
+    "id" : "BC294A97",
+    "lastKnownWriteTime" : 1584131202,
+    "last_content_update" : 1584131202,
+    "path" : "Z:/Thorne/Data Files/2 Climate Change/3 Projects/8 Water Quality/2 Processing & analysis/scripts for processing/waterlevel_processing_modern.R",
+    "project_path" : "scripts for processing/waterlevel_processing_modern.R",
+    "properties" : {
+        "cursorPosition" : "18,35",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
