@@ -244,4 +244,4 @@ level_working_path <- file.path(dirname(level_QAQC_path), level_working_file_nam
 write.csv(combined_level, level_working_path)
 
 # Move old long-term file into the history folder.
-fs::file_move(level_QAQC_path, file.path(dirname(level_QAQC_path), "history",))
+fs::file_move(level_QAQC_path, file.path(dirname(level_QAQC_path), "history"))

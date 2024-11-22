@@ -9,26 +9,21 @@ library(stringr)
 library(fs)
 
 
-test_inputs <- function(baro_path,
-                        baro_type,
-                        level_path, 
-                        level_type, 
-                        level_processed_path,
-                        level_QAQC_path,
-                        water_accessory_path){
-    
-return(paste(baro_path,
-              baro_type,
-               level_path,
-                level_type,
-                 level_processed_path,
-                 level_QAQC_path,
-                 water_accessory_path))    
-    
-    
+test_inputs <- function(data_root,
+                         baro_path,
+                          baro_type,
+                           level_path, 
+                            level_type, 
+                             level_QAQC_path,
+                              water_accessory_path){  
+return(paste(data_root,
+              baro_path,
+               baro_type,
+                level_path,
+                 level_type,
+                  level_QAQC_path,
+                   water_accessory_path))    
 }
-
-
 
 standardize.tower.baro = function(baro_path) {
   tower.csv <- read.csv(baro_path, stringsAsFactors = FALSE)
@@ -124,19 +119,19 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density) {
 # ------------ Primary processing logic starts here>--------------------------------------------------
 #----------------------------------------------------------------------------------------------------
 
-process_data <- function(baro_path,
-                         baro_type,
-                         level_path, 
-                         level_type, 
-                         level_processed_path,
-                         level_QAQC_path,
-                         water_accessory_path
-                         ){
+process_data <- function(data_root,
+                          baro_path,
+                            baro_type,
+                              level_path, 
+                                level_type, 
+                                  level_QAQC_path,
+                                    water_accessory_path){
 
     #Derived parameters
-
-    name_elements <- strsplit(tools::file_path_sans_ext(basename(level_path)), split = "_")[[1]]
-    logger_name   <- name_elements[1] 
+    print("Deriving parameters")
+    level_processed_path <- file.path(data_root, "processed data")
+    name_elements        <- strsplit(tools::file_path_sans_ext(basename(level_path)), split = "_")[[1]]
+    logger_name          <- name_elements[1]
 
     level_start <- name_elements[2] %>% str_replace_all("\\.", "_")
     level_end   <- name_elements[3] %>% str_replace_all("\\.", "_")
@@ -151,6 +146,20 @@ process_data <- function(baro_path,
 
     # Convert microsiemens to millisiemens. ------------------------------------------------------
 
+    print("Running processing script with the following parameters:")
+    print(paste("baro_path: ", baro_path))
+    print(paste("baro_type: ", baro_type))
+    print(paste("level_path: ", level_path))
+    print(paste("processed_path: ", level_processed_path))
+    print(paste("processed_file_name: ", level_processed_file_name))
+    print(paste("level_type: ", level_type))
+    print(paste("level_QAQC_path: ", level_QAQC_path))
+    print(paste("water_accessory_path: ", water_accessory_path))
+    print(paste("name_elements: ", name_elements))
+    print(paste("logger_name: ", logger_name))
+    print(paste("level_start: ", level_start))
+    print(paste("level_end: ", level_end))
+    
     inputheader = read.csv(level_path)
 
     removeheader <- function(level_path) {
@@ -193,7 +202,6 @@ process_data <- function(baro_path,
 
 
     # Actual water level processing -------------------------------------------------------
-
     # read in and process baro data
     baro.fxn = function(baro_type){
         if(baro_type == "logger"){
@@ -204,7 +212,6 @@ process_data <- function(baro_path,
     }
 
     baro = baro.fxn(baro_type)
-
     # Read in and process water level data
     level.fxn = function(level_type){
       if(level_type == "hobo"){
@@ -215,7 +222,6 @@ process_data <- function(baro_path,
     } 
 
     level = level.fxn(level_type)
-
     # Pull in water accessory information look-up table
     water_accessory = read.csv(water_accessory_path)
 
@@ -236,30 +242,25 @@ process_data <- function(baro_path,
     write.csv(final_level, file.path(level_processed_path, level_processed_file_name))
 
     # Join newly processed data with the long term site dataset.-------------------------------------------------------------
-
     # Combine newly processed data with historic QAQCed data
     level_processed = read.csv(file.path(level_processed_path, level_processed_file_name))
     level_longterm  = read.csv(level_QAQC_path)
     combined_level  = bind_rows(level_longterm, level_processed)
 
     #View(combined_level)
-
     #Get new start and end dates for the full dataset.
     combined_level$time <- ymd_hms(combined_level$time, tz = Sys.timezone())
     new_start_date <- format(min(combined_level$time, na.rm = T), "%Y-%m-%d") %>% str_replace_all("-", ".")
     new_end_date   <- format(max(combined_level$time, na.rm = T), "%Y-%m-%d") %>% str_replace_all("-", ".")
 
-
     dirname(level_QAQC_path)
 
     level_working_file_name <- paste0(paste(logger_name, new_start_date, new_end_date, sep = "_"), "_working.csv")
     level_working_path <- file.path(dirname(level_QAQC_path), level_working_file_name) # Output file for new working water level file ready for QAQC. Combining new processed data with longterm QAQC data.
-
     # Export updated long-term dataset
     write.csv(combined_level, level_working_path)
-
     # Move old long-term file into the history folder.
-    fs::file_move(level_QAQC_path, file.path(dirname(level_QAQC_path), "history",))
+    fs::file_move(level_QAQC_path, file.path(dirname(level_QAQC_path), "history"))
 
     return("Processing complete with no errors.")
 
