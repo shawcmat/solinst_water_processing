@@ -41,10 +41,11 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000) {
   clean.solinst <- function(solinist.data) {
     results <- solinst.data %>% 
       filter(LEVEL >= 0, LEVEL <= 20) %>% 
-      transmute(time = if (any(grepl("M", Time))) as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")
-                       else as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8"), 
-                level = if (max(LEVEL) < 9.5) LEVEL + 9.5
-                        else LEVEL, 
+      transmute(time = if(any(grepl("M", Time))){as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")
+                        }else{as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8")}, 
+                level = if(max(LEVEL) < 9.5){
+                        LEVEL + 9.5
+                          }else{LEVEL}, 
                 temperature = TEMPERATURE, 
                 conductivity = if (any(names(solinst.data) == "CONDUCTIVITY")) CONDUCTIVITY
                                else NA)
@@ -60,7 +61,7 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000) {
 
   unit.conversion <- function(solinst.data, programmed.h2o.density) {
     solinst.data %>% 
-      mutate(total_pressure = level * programmed.h2o.density * 9.80665/1000, 
+      mutate(total_pressure = level * programmed.h2o.density * 9.80665/1000, #
              salinity = 0.012 + (-0.2174 * ((conductivity)/53.087)^0.5) + (25.3283 * ((conductivity)/53.087)^1) + 
                (13.7714 * ((conductivity)/53.087)^1.5) + (-6.4788 * ((conductivity)/53.087)^2) + (2.5842 * ((conductivity)/53.087)^2.5)) %>% 
       select(-level, -conductivity)
@@ -75,18 +76,18 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000) {
 tp.to.wlas = function (logger.data, baro.data, h2o.density) {
 
   baro.compensation <- function(logger.data, baro.data) {
-    logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% 
+    logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% # Water level data is filtered to exclude rows where time or total pressure is NA.
       data.table(key = "time")
-    baro.dt <- data.table(filter(baro.data, !is.na(time), !is.na(baro_pressure)), key = "time")
-    logger.baro.dt <- baro.dt[logger.dt, roll = "nearest"]
+    baro.dt <- data.table(filter(baro.data, !is.na(time), !is.na(baro_pressure)), key = "time") #Barometric data is filtered to exclude rows where time or barometric pressure is NA.
+    logger.baro.dt <- baro.dt[logger.dt, roll = "nearest"] # Join water level data and barometric data. Joined to the nearest available observation of barometric data.
     logger.baro.dt %>% 
-      mutate(water_pressure = total_pressure - baro_pressure) %>% 
+      mutate(water_pressure = total_pressure - baro_pressure) %>% # water_pressure  is calculated by subtracting baro_pressure from total_pressure.
       select(-total_pressure, -baro_pressure)
   }
 
   level.conversion <- function(logger.data, h2o.density) {
     logger.data %>% 
-      mutate(water_level_above_sensor = water_pressure * 1000/(h2o.density * 9.80665)) %>% 
+      mutate(water_level_above_sensor = water_pressure * 1000/(h2o.density * 9.80665)) %>% # Convert water pressure and h2o.density to water_level_above_sensor.
       select(-water_pressure)
   }
 
@@ -116,7 +117,7 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density) {
 }
 
 #-----------------------------------------------------------------------------------------------------
-# ------------ Primary processing logic starts here>--------------------------------------------------
+# ------------ Primary processing logic starts here --------------------------------------------------
 #----------------------------------------------------------------------------------------------------
 
 process_data <- function(data_root,
@@ -127,7 +128,8 @@ process_data <- function(data_root,
                                   level_QAQC_path,
                                     water_accessory_path){
 
-    #Derived parameters
+    # Derive parameters from inputs.
+
     print("Deriving parameters")
     level_processed_path <- file.path(data_root, "processed data")
     name_elements        <- strsplit(tools::file_path_sans_ext(basename(level_path)), split = "_")[[1]]
@@ -144,8 +146,6 @@ process_data <- function(data_root,
     pre_year_start <- paste0(year(min(level_QAQC$time, na.rm = T)) - 1, "-12-31")
     exact_start_date <- format(min(level_QAQC$time, na.rm = T), "%Y-%m-%d")
 
-    # Convert microsiemens to millisiemens. ------------------------------------------------------
-
     print("Running processing script with the following parameters:")
     print(paste("baro_path: ", baro_path))
     print(paste("baro_type: ", baro_type))
@@ -160,29 +160,26 @@ process_data <- function(data_root,
     print(paste("level_start: ", level_start))
     print(paste("level_end: ", level_end))
     
-    inputheader = read.csv(level_path)
+
+    # 1.  Load logger data. Convert microsiemens to millisiemens. ------------------------------------------------------
 
     removeheader <- function(level_path) {
-        headers <- readLines(level_path, n = 25)
-        header.count = suppressWarnings(min(grep("^Date,Time,.*", headers)) - 1)
-        real_data <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count)
+        headers <- readLines(level_path, n = 25) #Load lines of text, capturing header.
+        header.count = suppressWarnings(min(grep("^Date,Time,.*", headers)) - 1) # Derive the size of the header but searching for the column names.
+        real_data <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count) # Load actual data, skipping header.
 
         if(header.count > 1){
-            header_data <- readLines(level_path, n = header.count)
-            readr::guess_encoding(level_path)
-            header_data <- iconv(header_data, from = "ISO-8859-1", to = "UTF-8")
-            offset <- header_data[grep(pattern = "^Offset", header_data)]
-            header_data_clean <- header_data[-grep(pattern = "^Offset", header_data)]
-            num_pairs <- length(header_data_clean) %/% 2
+            header_data <- readLines(level_path, n = header.count) #load just the header
+            header_data <- iconv(header_data, from = "ISO-8859-1", to = "UTF-8") #Convert encoding to UTF-9 to preserve units information.
+            offset <- header_data[grep(pattern = "^Offset", header_data)] #Extract offset, as format is different than other sections.
+            header_data_clean <- header_data[-grep(pattern = "^Offset", header_data)] # Remove offset section from the main header data.
+            num_pairs <- length(header_data_clean) %/% 2 # used in the following code, which uses AB matching to split data into names and values.
             header_data_clean <- paste0(header_data_clean[seq(1, length(header_data_clean), by = 2)], header_data_clean[seq(2, length(header_data_clean), by = 2)])
             header_data_clean <- str_split(header_data_clean, pattern = ":")
-
-            # Convert to named list
-            names_vector  <- sapply(header_data_clean, `[[`, 1)
-            values_vector <- sapply(header_data_clean, `[[`, 2)
-
-            header_data_clean <- data.frame(as.list(values_vector))
-            names(header_data_clean) <- names_vector
+            names_vector  <- sapply(header_data_clean, `[[`, 1) #Header labels
+            values_vector <- sapply(header_data_clean, `[[`, 2) #Header values
+            header_data_clean <- data.frame(as.list(values_vector)) #Create dataframe
+            names(header_data_clean) <- names_vector # Set names.
 
             return(list("header" = header_data_clean, "data" = real_data))
         }else{
@@ -193,39 +190,42 @@ process_data <- function(data_root,
 
     out <- removeheader(level_path)
 
-    outputdata <- out$data
+    leveldata <- out$data
     headerdata <- out$header
 
-    if(headerdata$CONDUCTIVITYUNIT == " µS/cm"){
-        outputdata$CONDUCTIVITY = outputdata$CONDUCTIVITY/1000
+    if(headerdata$CONDUCTIVITYUNIT == " µS/cm"){ #Check units listed in the header data. 
+        outputdata$CONDUCTIVITY = outputdata$CONDUCTIVITY/1000 # If it is microsiemens, (uS), we convert o millisiemens by dividing by 1000.
     }
 
 
-    # Actual water level processing -------------------------------------------------------
-    # read in and process baro data
-    baro.fxn = function(baro_type){
-        if(baro_type == "logger"){
+
+    # 2. Read and process baro data. --------------------------------------------------------------------
+
+    baro.fxn = function(baro_type, baro_path){ 
+        if(baro_type == "logger"){ # Check baro type. If logger, use logger standardization funciton.
           standardize.baro(baro_path) # TODO: Currently not a function explicitly written in the script.
         }else{
-          standardize.tower.baro(baro_path)
+          standardize.tower.baro(baro_path) #If not logger, assumes it is tower, and calls that function instead.
         }
     }
 
-    baro = baro.fxn(baro_type)
-    # Read in and process water level data
-    level.fxn = function(level_type){
-      if(level_type == "hobo"){
-        standardize.hobo(outputdata) # TODO: Currently not a function explicitly written in the script.
+    baro = baro.fxn(baro_type, baro_path) # load the designated processed baro data.
+
+    # 3. standardize the water level data. ------------------------------------------------------------
+
+    level.fxn = function(level_type, leveldata){
+      if(level_type == "hobo"){ # Check leve_type. If it is a hobo, use the standardize hobo function.
+        standardize.hobo(leveldata) # TODO: Currently not a function explicitly written in the script.
       }else{
-        standardize.solinst(outputdata)
+        standardize.solinst(leveldata) # If not a hobo, use the standardize solonist function to standardize data.
       } 
     } 
 
-    level = level.fxn(level_type)
-    # Pull in water accessory information look-up table
-    water_accessory = read.csv(water_accessory_path)
+    level = level.fxn(level_type, leveldata) # Standardize the water level data.
 
-    water_accessory$alt_name <- str_replace_all(water_accessory$logger, pattern = " ", replacement = "")
+    water_accessory = read.csv(water_accessory_path) # Pull in water accessory information look-up table
+
+    water_accessory$alt_name <- str_replace_all(water_accessory$logger, pattern = " ", replacement = "") # standardize logger names by removing spaces.
 
     # Convert total pressure to water level above sensor using local water density & barometric pressure
     level_barocomp = tp.to.wlas(level, baro, water_accessory$water_density[water_accessory$alt_name==logger_name]) # TODO: Might be an issue with pressure range.
