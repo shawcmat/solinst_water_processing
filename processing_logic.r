@@ -25,6 +25,38 @@ return(paste(data_root,
                    water_accessory_path))    
 }
 
+
+check_baro_dates <- function(baro_path){
+  dat <- standardize.tower.baro(baro_path)
+  min_time <- min(dat$time)
+  max_time <- max(dat$time)
+  min_time_str <- format(min_time, "%m/%d/%Y")
+  max_time_str <- format(max_time, "%m/%d/%Y")
+  return(paste("First date:", min_time_str, "Last date:", max_time_str))
+}
+
+check_level_dates <- function(solinst_path){
+  dat <- removeheader(solinst_path)
+  dat <- dat$data
+  dat <- transmute(dat,
+   time = if(any(grepl("M", Time))){as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")}
+   else{as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8")})
+  min_time <- min(dat$time)
+  max_time <- max(dat$time)
+  min_time_str <- format(min_time, "%m/%d/%Y")
+  max_time_str <- format(max_time, "%m/%d/%Y")
+  return(paste("First date:", min_time_str, "Last date:", max_time_str))
+}
+
+check_longterm_dates <- function(longterm_QAQC_path){
+  dat <- read.csv(longterm_QAQC_path)
+  min_time <- min(dat$time)
+  max_time <- max(dat$time)
+  min_time_str <- format(as.Date(min_time), "%m/%d/%Y")
+  max_time_str <- format(as.Date(max_time), "%m/%d/%Y")
+  return(paste("First date:", min_time_str, "Last date:", max_time_str))
+}
+
 standardize.tower.baro = function(baro_path) {
   tower.csv <- read.csv(baro_path, stringsAsFactors = FALSE)
   results <- tower.csv %>% 
@@ -116,6 +148,33 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density) {
   logger.data %>% baro.compensation(baro.data) %>% level.conversion(h2o.density)
 }
 
+# Splits header and data from a solinst data file.
+removeheader <- function(level_path) {
+        headers <- readLines(level_path, n = 25) #Load lines of text, capturing header.
+        header.count = suppressWarnings(min(grep("^Date,Time,.*", headers)) - 1) # Derive the size of the header but searching for the column names.
+        real_data <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count) # Load actual data, skipping header.
+
+        if(header.count > 1){
+            header_data <- readLines(level_path, n = header.count) #load just the header
+            header_data <- iconv(header_data, from = "ISO-8859-1", to = "UTF-8") #Convert encoding to UTF-9 to preserve units information.
+            offset <- header_data[grep(pattern = "^Offset", header_data)] #Extract offset, as format is different than other sections.
+            header_data_clean <- header_data[-grep(pattern = "^Offset", header_data)] # Remove offset section from the main header data.
+            num_pairs <- length(header_data_clean) %/% 2 # used in the following code, which uses AB matching to split data into names and values.
+            header_data_clean <- paste0(header_data_clean[seq(1, length(header_data_clean), by = 2)], header_data_clean[seq(2, length(header_data_clean), by = 2)])
+            header_data_clean <- str_split(header_data_clean, pattern = ":")
+            names_vector  <- sapply(header_data_clean, `[[`, 1) #Header labels
+            values_vector <- sapply(header_data_clean, `[[`, 2) #Header values
+            header_data_clean <- data.frame(as.list(values_vector)) #Create dataframe
+            names(header_data_clean) <- names_vector # Set names.
+
+            return(list("header" = header_data_clean, "data" = real_data))
+
+        }else{
+
+            return(list("header" = "", "data" = real_data))
+        }
+
+    }
 #-----------------------------------------------------------------------------------------------------
 # ------------ Primary processing logic starts here --------------------------------------------------
 #----------------------------------------------------------------------------------------------------
@@ -126,7 +185,8 @@ process_data <- function(data_root,
                               level_path, 
                                 level_type, 
                                   level_QAQC_path,
-                                    water_accessory_path){
+                                    water_accessory_path,
+                                      trim_days){
 
     # Derive parameters from inputs.
 
@@ -162,47 +222,22 @@ process_data <- function(data_root,
     
 
     # 1.  Load logger data. Convert microsiemens to millisiemens. ------------------------------------------------------
-
-    removeheader <- function(level_path) {
-        headers <- readLines(level_path, n = 25) #Load lines of text, capturing header.
-        header.count = suppressWarnings(min(grep("^Date,Time,.*", headers)) - 1) # Derive the size of the header but searching for the column names.
-        real_data <- read.csv(level_path, stringsAsFactors = FALSE, skip = header.count) # Load actual data, skipping header.
-
-        if(header.count > 1){
-            header_data <- readLines(level_path, n = header.count) #load just the header
-            header_data <- iconv(header_data, from = "ISO-8859-1", to = "UTF-8") #Convert encoding to UTF-9 to preserve units information.
-            offset <- header_data[grep(pattern = "^Offset", header_data)] #Extract offset, as format is different than other sections.
-            header_data_clean <- header_data[-grep(pattern = "^Offset", header_data)] # Remove offset section from the main header data.
-            num_pairs <- length(header_data_clean) %/% 2 # used in the following code, which uses AB matching to split data into names and values.
-            header_data_clean <- paste0(header_data_clean[seq(1, length(header_data_clean), by = 2)], header_data_clean[seq(2, length(header_data_clean), by = 2)])
-            header_data_clean <- str_split(header_data_clean, pattern = ":")
-            names_vector  <- sapply(header_data_clean, `[[`, 1) #Header labels
-            values_vector <- sapply(header_data_clean, `[[`, 2) #Header values
-            header_data_clean <- data.frame(as.list(values_vector)) #Create dataframe
-            names(header_data_clean) <- names_vector # Set names.
-
-            return(list("header" = header_data_clean, "data" = real_data))
-        }else{
-            return(list("header" = "", "data" = real_data))
-        }
-
-    }
-
+    print("1. Loading logger data.")
+    
     out <- removeheader(level_path)
 
     leveldata <- out$data
     headerdata <- out$header
 
     if(headerdata$CONDUCTIVITYUNIT == " µS/cm"){ #Check units listed in the header data. 
-        outputdata$CONDUCTIVITY = outputdata$CONDUCTIVITY/1000 # If it is microsiemens, (uS), we convert o millisiemens by dividing by 1000.
+        leveldata$CONDUCTIVITY = leveldata$CONDUCTIVITY/1000 # If it is microsiemens, (uS), we convert to millisiemens by dividing by 1000.
     }
 
 
-
     # 2. Read and process baro data. --------------------------------------------------------------------
-
+    print("2. Loading and processing baro data.")
     baro.fxn = function(baro_type, baro_path){ 
-        if(baro_type == "logger"){ # Check baro type. If logger, use logger standardization funciton.
+        if(baro_type == "logger"){ # Check baro type. If logger, use logger standardization function.
           standardize.baro(baro_path) # TODO: Currently not a function explicitly written in the script.
         }else{
           standardize.tower.baro(baro_path) #If not logger, assumes it is tower, and calls that function instead.
@@ -212,7 +247,7 @@ process_data <- function(data_root,
     baro = baro.fxn(baro_type, baro_path) # load the designated processed baro data.
 
     # 3. standardize the water level data. ------------------------------------------------------------
-
+    print("3. standardizing water level data.")
     level.fxn = function(level_type, leveldata){
       if(level_type == "hobo"){ # Check leve_type. If it is a hobo, use the standardize hobo function.
         standardize.hobo(leveldata) # TODO: Currently not a function explicitly written in the script.
@@ -237,6 +272,15 @@ process_data <- function(data_root,
     # Re-name temperature columns to be more clear
     final_level = level_barocomp %>%
       rename(water_temp = i.temperature, air_temp = temperature)
+
+    # If option was selected, trim first and last days from the level file.
+
+    if(trim_days){
+      first_day <- as.Date(min(final_level$time))
+      last_day <- as.Date(max(final_level$time))
+      final_level <- final_level %>%
+        filter(as.Date(time)) 
+    }
 
     # Export processed dataset
     write.csv(final_level, file.path(level_processed_path, level_processed_file_name))
