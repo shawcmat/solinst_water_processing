@@ -118,7 +118,8 @@ check_baro_dates <- function(baro_path){
   max_time <- max(dat$time)
   min_time_str <- format(min_time, "%m/%d/%Y")
   max_time_str <- format(max_time, "%m/%d/%Y")
-  return(paste("First date:", min_time_str, "Last date:", max_time_str))
+  message <- paste("First date:", min_time_str, "Last date:", max_time_str)
+  return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
 }
 
 check_level_dates <- function(solinst_path){
@@ -136,7 +137,9 @@ check_level_dates <- function(solinst_path){
   min_time_str <- format(min_time, "%m/%d/%Y")
   max_time_str <- format(max_time, "%m/%d/%Y")
   
-  return(paste("First date:", min_time_str, "Last date:", max_time_str, "     File name:", basename(solinst_path), "     Logger Name:", logger_name))
+  message <- paste("First date:", min_time_str, "Last date:", max_time_str, "     File name:", basename(solinst_path), "     Logger Name:", logger_name)
+
+  return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
 }
 
 check_longterm_dates <- function(longterm_QAQC_path){
@@ -145,7 +148,9 @@ check_longterm_dates <- function(longterm_QAQC_path){
   max_time <- max(dat$time)
   min_time_str <- format(as.Date(min_time), "%m/%d/%Y")
   max_time_str <- format(as.Date(max_time), "%m/%d/%Y")
-  return(paste("First date:", min_time_str, "Last date:", max_time_str))
+  message <- paste("First date:", min_time_str, "Last date:", max_time_str)
+
+  return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
 }
 
 standardize.tower.baro = function(baro_path) {

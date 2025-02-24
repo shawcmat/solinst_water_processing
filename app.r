@@ -50,18 +50,22 @@ ui <- fluidPage(theme = shinytheme("flatly"),
 server <- function(input, output, session) {
 
     #Setting up reactive values
-
+    startDate <- reactiveVal()
+    startDate("NA")
+    endDate <- reactiveVal()
+    endDate("NA")
+    
     outcode <- reactiveVal()
     outcode("Waiting")
 
-    outpath <- reactiveVal()
-    outpath("NA")
+    processed_outpath <- reactiveVal()
+    processed_outpath("NA")
 
-    QAQCpath <- reactiveVal()
-    QAQCpath("NA")
+    QAQC_outpath <- reactiveVal()
+    QAQC_outpath("NA")
 
-    newLTpath <- reactiveVal()
-    newLTpath("NA")
+    newLT_outpath <- reactiveVal()
+    newLT_outpath("NA")
 
     # Update session volumes for folder and file selection.
     volumes <- getVolumes()()
@@ -125,6 +129,7 @@ server <- function(input, output, session) {
             h4("Selected Baro file date range:"),
             verbatimTextOutput("baro_date_range"),
           )
+        
         })
 
         output$part3_raw <- renderUI({
@@ -157,6 +162,12 @@ server <- function(input, output, session) {
             hr()
           )
         })
+
+        level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
+        dates_out <- check_level_dates(level_path)
+        startDate(dates_out$start_date)
+        endDate(dates_out$end_date)
+
       }
     })
 
@@ -201,7 +212,7 @@ server <- function(input, output, session) {
 
 
           outcode(process_out$status)
-          outpath(process_out$processed_fileout)
+          processed_outpath(process_out$processed_fileout)
       }else{
         outcode(flag)
       }
@@ -226,8 +237,8 @@ server <- function(input, output, session) {
           h4("Processed Data Viewer"),
           numericInput("plot_trim_days_start", "Trim days from start:", value = 0, min = 0),
           numericInput("plot_trim_days_end", "Trim days from end:", value = 0, min = 0),
-          dateInput("view_start", "View start date:", value = Sys.Date()),
-          dateInput("view_end", "View end date:", value = Sys.Date()),
+          dateInput("view_start", "View start date:", value = startDate()),
+          dateInput("view_end", "View end date:", value = endDate()),
           selectInput("variable_to_plot", "Select variable to plot:", choices = c("water_level_NAVD88", "water_temp", "salinity")),
           actionButton("generate_plot", "Generate processed plot"),
           actionButton("reset_view", "Reset view"),
@@ -242,8 +253,8 @@ server <- function(input, output, session) {
         observeEvent(input$reset_view, {
       updateNumericInput(session, "plot_trim_days_start", value = 0)
       updateNumericInput(session, "plot_trim_days_end", value = 0)
-      updateDateInput(session, "view_start", value = Sys.Date())
-      updateDateInput(session, "view_end", value = Sys.Date())
+      updateDateInput(session, "view_start", value = startDate())
+      updateDateInput(session, "view_end", value = endDate())
         })
 
   # If the "auto_outlier_detection" box in the QAQC options is checked, then the "set zscore threshold" option is visible.
@@ -262,7 +273,7 @@ server <- function(input, output, session) {
   # If generate_plot button is selected, generate plot with the selected parameters.
   observeEvent(input$generate_plot, {
   output$processed_plot <- renderPlot({
-    processed_data_path <- outpath()
+    processed_data_path <- processed_outpath()
     view_start <- input$view_start
     view_end <- input$view_end
     plot_start_trim <- input$plot_trim_days_start
@@ -281,7 +292,7 @@ server <- function(input, output, session) {
 # If auto_QAQC button is selected, run autoQAQC code with the selected parameters. Show QAQC plot viwer, and reveal step 7. (Longterm attach)
   observeEvent(input$auto_qaqc, {
     data_root <- parseDirPath(roots, input$data_root_in)
-    processed_file_path <- outpath()
+    processed_file_path <- processed_outpath()
     water_metadata_path <- as.character(parseFilePaths(roots, input$water_metadata_path_in)$datapath)
     trim_days_start <- input$trim_days_start
     trim_days_end <- input$trim_days_end
@@ -298,7 +309,7 @@ server <- function(input, output, session) {
                                    check_data_gaps = check_data_gaps,
                                    zscore_threshold = zscore_threshold)
     
-    QAQCpath(qaqc_path_out)
+    QAQC_outpath(qaqc_path_out)
 
     output$QAQC_plot_viewer <- renderUI({
       tagList(
@@ -326,8 +337,8 @@ server <- function(input, output, session) {
 # If generate_QAQC_plot button is selected, display plot with the selected parameters.
   observeEvent(input$generate_QAQC_plot, {
     output$QAQC_plot <- renderPlot({
-      processed_file_path <- outpath()
-      QAQC_data_path <- QAQCpath()
+      processed_file_path <- processed_outpath()
+      QAQC_data_path <- QAQC_outpath()
       view_start <- input$view_start
       view_end <- input$view_end
       plot_start_trim <- input$plot_trim_days_start
@@ -359,11 +370,11 @@ server <- function(input, output, session) {
 # if attach_to_longterm button is selected, attach QAQC'd data to the longterm data set and complete processing.
   observeEvent(input$attach_longterm, {
     data_root <- parseDirPath(roots, input$data_root_in)
-    ind_QAQC_path <- QAQCpath()
+    ind_QAQC_path <- QAQC_outpath()
     longterm_QAQC_path <- as.character(parseFilePaths(roots, input$longterm_QAQC_path_in)$datapath)
     
     lt_out <- attach_to_longterm(data_root, ind_QAQC_path, longterm_QAQC_path)
-    newLTpath(lt_out)
+    newLT_outpath(lt_out)
 
     output$longterm_dates <- renderUI({
       tagList(
@@ -406,7 +417,7 @@ server <- function(input, output, session) {
     }else{
       baro_path <- as.character(parseFilePaths(roots, input$baro_path_in)$datapath)
       date_range <- check_baro_dates(baro_path)
-      cat(date_range)
+      cat(date_range$message)
     }
   })
 
@@ -417,7 +428,7 @@ server <- function(input, output, session) {
     }else{
       level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
       date_range <- check_level_dates(level_path)
-      cat(date_range)
+      cat(date_range$message)
     }
   })
 
@@ -426,8 +437,8 @@ server <- function(input, output, session) {
     if(is.integer(input$level_path_in)){
       cat("")
     }else{
-      date_range <- check_longterm_dates(newLTpath())
-      cat(date_range)
+      date_range <- check_longterm_dates(newLT_outpath())
+      cat(date_range$message)
     }
   })
 
@@ -476,13 +487,13 @@ server <- function(input, output, session) {
 
     observe({
       output$processed_file_path <- renderPrint({
-        cat(outpath())
+        cat(processed_outpath())
       })
     })
 
     observe({
       output$qaqc_file_path_text <- renderPrint({
-        cat(qaqcpath())
+        cat(QAQC_outpath())
       })
     })
       
