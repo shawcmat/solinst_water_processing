@@ -136,7 +136,7 @@ check_level_dates <- function(solinst_path){
   min_time_str <- format(min_time, "%m/%d/%Y")
   max_time_str <- format(max_time, "%m/%d/%Y")
   
-  return(paste("File name:", basename(solinst_path), "    Logger Name:", logger_name, "    First date:", min_time_str, "Last date:", max_time_str))
+  return(paste("First date:", min_time_str, "Last date:", max_time_str, "     File name:", basename(solinst_path), "     Logger Name:", logger_name))
 }
 
 check_longterm_dates <- function(longterm_QAQC_path){
@@ -354,6 +354,7 @@ process_data <- function(data_root,
   # Derive parameters from inputs.
   print("Deriving parameters")
   level_processed_path <- file.path(data_root, "processed data")
+  dir.create(level_processed_path, showWarnings = FALSE)
   name_elements        <- strsplit(tools::file_path_sans_ext(basename(raw_data_path)), split = "_")[[1]]
   logger_name          <- name_elements[1]
 
@@ -490,7 +491,8 @@ perform_auto_QAQC <- function(data_root,
                               trim_days_start,
                               trim_days_end,
                               auto_outlier_detection,
-                              check_data_gaps){
+                              check_data_gaps,
+                              zscore_threshold = 5){
 
   name_elements <- strsplit(tools::file_path_sans_ext(basename(level_processed_path)), split = "_")[[1]]
   logger_name <- name_elements[1]                              
@@ -590,9 +592,9 @@ perform_auto_QAQC <- function(data_root,
     return(data)
   }
 
-  processed_data <- check_outliers(processed_data, "water_temp", threshold = 7, log_file_path)
-  processed_data <- check_outliers(processed_data, "salinity", threshold = 7, log_file_path)
-  processed_data <- check_outliers(processed_data, "water_level_NAVD88", threshold = 7, log_file_path)
+  processed_data <- check_outliers(processed_data, "water_temp", threshold = zscore_threshold, log_file_path)
+  processed_data <- check_outliers(processed_data, "salinity", threshold = zscore_threshold, log_file_path)
+  processed_data <- check_outliers(processed_data, "water_level_NAVD88", threshold = zscore_threshold, log_file_path)
 
   }
 
