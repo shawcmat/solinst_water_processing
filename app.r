@@ -3,6 +3,7 @@ library(shinyFiles)
 library(fs)
 library(tools)
 library(shinythemes)
+library(plotly)
 source("./processing_logic.r")
 
 
@@ -25,80 +26,89 @@ ui <- fluidPage(theme = shinytheme("flatly"),
   titlePanel("Water logger data processing"),
   sidebarLayout(
     sidebarPanel(
-      h4("1. Select the site folder where the water data is located."),
+      h4("1. Select water logger site folder."),
       shinyDirButton("data_root_in", "Folder select", "Please select a folder."),
       verbatimTextOutput("data_root_out"),
       hr(),
-      uiOutput("part2_baro"),
-      uiOutput("part3_raw"),
+      uiOutput("part2_raw"),
+      uiOutput("part3_baro"),
       uiOutput("part4_metadata"),
       uiOutput("part5_processing"),
       uiOutput("part6_QAQC"),
       uiOutput("part7_longterm"),
     width = 4),
   mainPanel(
-    uiOutput("baro_dates"),
     uiOutput("raw_dates"),
+    uiOutput("baro_dates"),
     uiOutput("processed_plot_viewer"),
     uiOutput("QAQC_plot_viewer"),
+    uiOutput("longterm_plot_viewer"),
     uiOutput("longterm_dates")
     )
   )
 )
 
+
+
 # Define Server Logic
 server <- function(input, output, session) {
 
-    #Setting up reactive values
-    startDate <- reactiveVal()
-    startDate("NA")
-    endDate <- reactiveVal()
-    endDate("NA")
-    
-    outcode <- reactiveVal()
-    outcode("Waiting")
+  #Setting up reactive values
+  startDate <- reactiveVal()
+  startDate("NA")
+  endDate <- reactiveVal()
+  endDate("NA")
 
-    processed_outpath <- reactiveVal()
-    processed_outpath("NA")
+  processed_outpath <- reactiveVal()
+  processed_outpath("NA")
 
-    QAQC_outpath <- reactiveVal()
-    QAQC_outpath("NA")
+  processed_outcode <- reactiveVal()
+  processed_outcode("Waiting")
 
-    newLT_outpath <- reactiveVal()
-    newLT_outpath("NA")
+  QAQC_outpath <- reactiveVal()
+  QAQC_outpath("NA")
 
-    # Update session volumes for folder and file selection.
-    volumes <- getVolumes()()
+  QAQC_outcode <- reactiveVal()
+  QAQC_outcode("Waiting")
 
-    roots <- reactiveVal(volumes)
+  newLT_outpath <- reactiveVal()
+  newLT_outpath("NA")
 
-    shinyDirChoose(input, "data_root_in",             roots = roots, session = session)
-    shinyFileChoose(input, "baro_path_in",            roots = roots, session = session)
-    shinyFileChoose(input, "level_path_in",           roots = roots, session = session)
-    shinyFileChoose(input, "longterm_QAQC_path_in",      roots = roots, session = session)
-    shinyFileChoose(input, "water_metadata_path_in", roots = roots, session = session)
+  newLT_outcode <- reactiveVal()
+  newLT_outcode("Waiting")
 
-    updateFileChoose <- function(SiteDir){
-      print("called!")
-      print(SiteDir)
-       
-      if(!is.null(SiteDir) && !anyNA(SiteDir) && length(SiteDir) > 0) {
-        new_roots <- roots()
-        new_roots["SiteDir"] <- SiteDir
-        roots(new_roots)
+  # Update session volumes for folder and file selection.
+  volumes <- getVolumes()()
 
-        file_labels <- c("baro_path_in",
-                         "level_path_in",
-                         "longterm_QAQC_path_in",
-                         "water_metadata_path_in")
+  roots <- reactiveVal(volumes)
 
-      for(var_label in file_labels){
-        shinyFiles::shinyFileChoose(input, var_label, 
-                                    roots = roots, 
-                                    defaultRoot = "SiteDir",
-                                    session = session)
-      }
+  shinyDirChoose(input, "data_root_in",             roots = roots, session = session)
+  shinyFileChoose(input, "baro_path_in",            roots = roots, session = session)
+  shinyFileChoose(input, "level_path_in",           roots = roots, session = session)
+  shinyFileChoose(input, "longterm_QAQC_path_in",      roots = roots, session = session)
+  shinyFileChoose(input, "water_metadata_path_in", roots = roots, session = session)
+
+  updateFileChoose <- function(SiteDir){
+    #print("called!")
+    print(SiteDir)
+     
+    if(!is.null(SiteDir) && !anyNA(SiteDir) && length(SiteDir) > 0) {
+    new_roots <- roots()
+    new_roots["SiteDir"] <- SiteDir
+    roots(new_roots)
+
+    file_labels <- c("baro_path_in",
+             "level_path_in",
+             "longterm_QAQC_path_in",
+             "water_metadata_path_in")
+
+    for(var_label in file_labels){
+    shinyFiles::shinyFileChoose(input, var_label, 
+                  roots = roots, 
+                  defaultRoot = "SiteDir",
+                  session = session)
     }
+  }
   }
 
 # -----------------------------------------------------------------------------
@@ -107,190 +117,190 @@ server <- function(input, output, session) {
 
   #Upon entering a data_root, adds that root as a new volume for easier file selection and reveal next step.
    observe({
-      if (length(input$data_root_in) > 1) {
-        updateFileChoose(parseDirPath(roots, input$data_root_in))
-        output$part2_baro <- renderUI({
-          tagList(
-            h4("2. Select the raw baro data file for your site and select baro type."),
-            shinyFilesButton("baro_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
-            verbatimTextOutput("baro_path_out"),
-            selectInput("baro_type", "Select baro type", choices = c("tower", "logger (Not implemented yet)")),
-            hr()
-          )
-        })
-      }
+    if (length(input$data_root_in) > 1) {
+    updateFileChoose(parseDirPath(roots, input$data_root_in))
+    output$part2_raw <- renderUI({
+      tagList(
+      h4("2. Select raw water level data file to process."),
+      shinyFilesButton("level_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
+      verbatimTextOutput("level_path_out"),
+      selectInput("level_type", "Select level type", choices = c("solinst", "hobo (Not implemented yet)")),
+      hr()
+      )
     })
+    }
+  })
+
+#Upon entering level_path_in, display file name, site name, start and end dates in main panel. Reveal next step.
+  observe({
+    if (length(input$level_path_in) > 1) {
+
+      level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
+      dates_out <- check_level_dates(level_path)
+      startDate(dates_out$start_date)
+      endDate(dates_out$end_date)
+
+      output$raw_dates <- renderUI({
+        tagList(
+        h4("Selected raw level file date range:"),
+        verbatimTextOutput("level_date_range")
+        )
+      })
+
+      output$part3_baro <- renderUI({
+        tagList(
+        h4("3. Select a barometric pressure data file associated with your deployment."),
+        shinyFilesButton("baro_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
+        verbatimTextOutput("baro_path_out"),
+        selectInput("baro_type", "Select baro type", choices = c("tower", "logger (Not implemented yet)")),
+        hr()
+        )
+      })
+    }
+  })
 
 #Upon entering baro_path_in, display baro date range in main panel and reveal next step. 
-    observe({
-      if (length(input$baro_path_in) > 1) {
-        output$baro_dates <- renderUI({
-          tagList(
-            h4("Selected Baro file date range:"),
-            verbatimTextOutput("baro_date_range"),
-          )
-        
-        })
+  observe({
+    if (length(input$baro_path_in) > 1) {
+      output$baro_dates <- renderUI({
+        tagList(
+          h4("Selected Baro file date range:"),
+          verbatimTextOutput("baro_date_range"),
+        )
+      })
 
-        output$part3_raw <- renderUI({
-          tagList(
-            h4("3. Select raw water level data file to process."),
-            shinyFilesButton("level_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
-            verbatimTextOutput("level_path_out"),
-            selectInput("level_type", "Select level type", choices = c("solinst", "hobo (Not implemented yet)")),
-            hr()
-          )
-        })
-      }
+      output$part4_metadata <- renderUI({
+        tagList(
+          h4("4. Select water metadata file"),
+          shinyFilesButton("water_metadata_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
+          verbatimTextOutput("water_metadata_path_out"),
+          hr()
+        )
     })
-
-# Upon entering level_path_in, display file name, site name, start and end dates in main panel. Reveal next step.
-    observe({
-      if (length(input$level_path_in) > 1) {
-        output$raw_dates <- renderUI({
-          tagList(
-            h4("Selected raw level file date range:"),
-            verbatimTextOutput("level_date_range")
-          )
-        })
-
-        output$part4_metadata <- renderUI({
-          tagList(
-            h4("4. Select water metadata file"),
-            shinyFilesButton("water_metadata_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
-            verbatimTextOutput("water_metadata_path_out"),
-            hr()
-          )
-        })
-
-        level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
-        dates_out <- check_level_dates(level_path)
-        startDate(dates_out$start_date)
-        endDate(dates_out$end_date)
-
-      }
-    })
+    }
+  })
 
 # Upon entering water_accesory_path_in, reveal processing button.
-    observe({
-      if (length(input$water_metadata_path_in) > 1) {
-        output$part5_processing <- renderUI({
-          tagList(
-            h4("5. Start processing."),
-            actionButton("process", "Process File"),
-            verbatimTextOutput("status")
-          )
-        })
-      }
+  observe({
+    if (length(input$water_metadata_path_in) > 1) {
+    output$part5_processing <- renderUI({
+      tagList(
+      h4("5. Start processing."),
+      actionButton("process", "Process File"),
+      verbatimTextOutput("processed_status")
+      )
     })
+    }
+  })
 
 # After processing, display option for selecting processed data file.
 # Upon pressing the Process_File button, display option for processed data plot viewer, and reveal options for autoQAQC step.
-    observeEvent(input$process, {
-      data_root <- parseDirPath(roots, input$data_root_in)
-      baro_path <- as.character(parseFilePaths(roots, input$baro_path_in)$datapath)
-      baro_type <- input$baro_type
-      level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
-      level_type <- input$level_type
-      longterm_QAQC_path <- as.character(parseFilePaths(roots, input$longterm_QAQC_path_in)$datapath)
-      water_metadata_path <- as.character(parseFilePaths(roots, input$water_metadata_path_in)$datapath)
-      trim_days <- input$trim_days
+  observeEvent(input$process, {
+    data_root <- parseDirPath(roots, input$data_root_in)
+    baro_path <- as.character(parseFilePaths(roots, input$baro_path_in)$datapath)
+    baro_type <- input$baro_type
+    level_path <- as.character(parseFilePaths(roots, input$level_path_in)$datapath)
+    level_type <- input$level_type
+    longterm_QAQC_path <- as.character(parseFilePaths(roots, input$longterm_QAQC_path_in)$datapath)
+    water_metadata_path <- as.character(parseFilePaths(roots, input$water_metadata_path_in)$datapath)
+    trim_days <- input$trim_days
 
-      flag <- check_errors(baro_path,
-                            level_path,
-                              longterm_QAQC_path,
-                               water_metadata_path)
+    flag <- check_errors(baro_path,
+              level_path,
+                longterm_QAQC_path,
+                 water_metadata_path)
 
-      if(flag == "No issues"){
-          outcode("processing")
-          process_out <- process_data(data_root,
-                                 baro_path,
-                                 baro_type,
-                                 level_path, 
-                                 level_type,
-                                 water_metadata_path)
+    if(flag == "No issues"){
+      processed_outcode("processing...")
+      process_out <- process_data(data_root,
+                 baro_path,
+                 baro_type,
+                 level_path, 
+                 level_type,
+                 water_metadata_path)
 
 
-          outcode(process_out$status)
-          processed_outpath(process_out$processed_fileout)
-      }else{
-        outcode(flag)
-      }
-      # Render UI for autoQAQC options and button.
-      output$part6_QAQC <- renderUI({
-        tagList(
-          h4("6. Select QAQC options."),
-          numericInput("trim_days_start", "Trim days from start:", value = 0, min = 0),
-          numericInput("trim_days_end", "Trim days from end:", value = 0, min = 0),
-          checkboxInput("auto_outlier_detection", "Perform auto outlier detection using z-scores", value = TRUE),
-          checkboxInput("check_data_gaps", "Check for data gaps", value = TRUE),
-          checkboxInput("check_water_levels", "Check for water levels less than exposure height", value = TRUE),
-          uiOutput("set_zscore_threshold"),
-          actionButton("auto_qaqc", "Perform Auto QA/QC"),
-          hr()
-        )
-      })
+      processed_outcode(process_out$status)
+      processed_outpath(process_out$processed_fileout)
+    }else{
+    processed_outcode(flag)
+    }
+    # Render UI for autoQAQC options and button.
+    output$part6_QAQC <- renderUI({
+    tagList(
+      h4("6. Select QAQC options."),
+      numericInput("trim_days_start", "Trim days from start:", value = 0, min = 0),
+      numericInput("trim_days_end", "Trim days from end:", value = 0, min = 0),
+      checkboxInput("auto_outlier_detection", "Perform auto outlier detection using z-scores", value = TRUE),
+      checkboxInput("check_data_gaps", "Check for data gaps", value = TRUE),
+      checkboxInput("check_water_levels", "Check for water levels less than exposure height", value = TRUE),
+      uiOutput("set_zscore_threshold"),
+      actionButton("auto_QAQC", "Perform Auto QA/QC"),
+      verbatimTextOutput("QAQC_status"),
+      hr()
+    )
+    })
 
-      # Render UI for processed_plot_viewer
-      output$processed_plot_viewer <- renderUI({
-        tagList(
-          h4("Processed Data Viewer"),
-          numericInput("plot_trim_days_start", "Trim days from start:", value = 0, min = 0),
-          numericInput("plot_trim_days_end", "Trim days from end:", value = 0, min = 0),
-          dateInput("view_start", "View start date:", value = startDate()),
-          dateInput("view_end", "View end date:", value = endDate()),
-          selectInput("variable_to_plot", "Select variable to plot:", choices = c("water_level_NAVD88", "water_temp", "salinity")),
-          actionButton("generate_plot", "Generate processed plot"),
-          actionButton("reset_view", "Reset view"),
-          hr(),
-          plotOutput("processed_plot"),
-          hr()
-        )
-      })
-        })
+    # Render UI for processed_plot_viewer
+    output$processed_plot_viewer <- renderUI({
+    tagList(
+      h4("Processed Data Viewer"),
+      numericInput("plot_trim_days_start", "Trim days from start:", value = 0, min = 0),
+      numericInput("plot_trim_days_end", "Trim days from end:", value = 0, min = 0),
+      dateInput("view_start", "View start date:", value = startDate()),
+      dateInput("view_end", "View end date:", value = endDate()),
+      selectInput("variable_to_plot", "Select variable to plot:", choices = c("water_level_NAVD88", "water_temp", "salinity")),
+      actionButton("generate_plot", "Generate processed plot"),
+      actionButton("reset_view", "Reset view"),
+      hr(),
+      plotlyOutput("processed_plot"),
+      hr()
+    )
+    })
+    })
 
-        # Reset view button functionality
-        observeEvent(input$reset_view, {
-      updateNumericInput(session, "plot_trim_days_start", value = 0)
-      updateNumericInput(session, "plot_trim_days_end", value = 0)
-      updateDateInput(session, "view_start", value = startDate())
-      updateDateInput(session, "view_end", value = endDate())
-        })
+    # Reset view button functionality
+    observeEvent(input$reset_view, {
+    updateNumericInput(session, "plot_trim_days_start", value = 0)
+    updateNumericInput(session, "plot_trim_days_end", value = 0)
+    updateDateInput(session, "view_start", value = startDate())
+    updateDateInput(session, "view_end", value = endDate())
+    })
 
   # If the "auto_outlier_detection" box in the QAQC options is checked, then the "set zscore threshold" option is visible.
   observe({ if (!is.null(input$auto_outlier_detection) && input$auto_outlier_detection) {
+  output$set_zscore_threshold <- renderUI({
+  tagList(
+    numericInput("zscore_threshold", "Z-Score Threshold:", value = 5, min = 1)
+      )
+  }) } else {
     output$set_zscore_threshold <- renderUI({
-    tagList(
-      numericInput("zscore_threshold", "Z-Score Threshold:", value = 5, min = 1)
-          )
-    }) } else {
-      output$set_zscore_threshold <- renderUI({
-          NULL
-      })
-      }
+      NULL
     })
+    }
+  })
 
   # If generate_plot button is selected, generate plot with the selected parameters.
   observeEvent(input$generate_plot, {
-  output$processed_plot <- renderPlot({
-    processed_data_path <- processed_outpath()
-    view_start <- input$view_start
-    view_end <- input$view_end
-    plot_start_trim <- input$plot_trim_days_start
-    plot_end_trim <- input$plot_trim_days_end
-    variable_to_plot <- input$variable_to_plot
-    plot <- generate_level_plot(primary_data_path = processed_data_path, 
-                                view_start = view_start,
-                                view_end = view_end,
-                                start_trim = plot_start_trim,
-                                end_trim = plot_end_trim,
-                                variable_name = variable_to_plot)
-    print(plot)
-  })
+    output$processed_plot <- renderPlotly({
+      processed_data_path <- processed_outpath()
+      view_start <- input$view_start
+      view_end <- input$view_end
+      plot_start_trim <- input$plot_trim_days_start
+      plot_end_trim <- input$plot_trim_days_end
+      variable_to_plot <- input$variable_to_plot
+      plot <- generate_level_plot(primary_data_path = processed_data_path, 
+                    view_start = view_start,
+                    view_end = view_end,
+                    start_trim = plot_start_trim,
+                    end_trim = plot_end_trim,
+                    variable_name = variable_to_plot)
+      ggplotly(plot)
+    })
   })
 
 # If auto_QAQC button is selected, run autoQAQC code with the selected parameters. Show QAQC plot viwer, and reveal step 7. (Longterm attach)
-  observeEvent(input$auto_qaqc, {
+  observeEvent(input$auto_QAQC, {
     data_root <- parseDirPath(roots, input$data_root_in)
     processed_file_path <- processed_outpath()
     water_metadata_path <- as.character(parseFilePaths(roots, input$water_metadata_path_in)$datapath)
@@ -300,71 +310,104 @@ server <- function(input, output, session) {
     check_data_gaps <- input$check_data_gaps
     zscore_threshold <- input$zscore_threshold
 
-    qaqc_path_out <- perform_auto_QAQC(data_root = data_root,
-                                   level_processed_path = processed_file_path,
-                                   water_metadata_path = water_metadata_path,
-                                   trim_days_start = trim_days_start,
-                                   trim_days_end = trim_days_end,
-                                   auto_outlier_detection = auto_outlier_detection,
-                                   check_data_gaps = check_data_gaps,
-                                   zscore_threshold = zscore_threshold)
-    
-    QAQC_outpath(qaqc_path_out)
+    QAQC_path_out <- perform_auto_QAQC(data_root = data_root,
+                     level_processed_path = processed_file_path,
+                     water_metadata_path = water_metadata_path,
+                     trim_days_start = trim_days_start,
+                     trim_days_end = trim_days_end,
+                     auto_outlier_detection = auto_outlier_detection,
+                     check_data_gaps = check_data_gaps,
+                     zscore_threshold = zscore_threshold)
+
+    QAQC_outpath(QAQC_path_out)
+    QAQC_message <- paste0("AutoQAQC complete. Output saved to ", QAQC_path_out)
+    QAQC_outcode(QAQC_message)
+
 
     output$QAQC_plot_viewer <- renderUI({
       tagList(
       h4("QAQC Data Viewer"),
-      checkboxInput("join_plot_output", "Join plot output"),
+      checkboxInput("join_plot_output", "Join plot output", value = TRUE),
       actionButton("generate_QAQC_plot", "Generate auto-QA plot"),
-      plotOutput("QAQC_plot"),
+      plotlyOutput("QAQC_plot"),
       hr()
       )
     })
 
     output$part7_longterm <- renderUI({
       tagList(
-        h4("7. Attach to longterm dataset."),
-        h6("Select longterm dataset file."),
-        shinyFilesButton("longterm_QAQC_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
-        verbatimTextOutput("longterm_QAQC_path_out"),
-        actionButton("attach_longterm", "Attach to longterm file.")
+      h4("7. Attach to longterm dataset."),
+      h6("Select longterm dataset file."),
+      shinyFilesButton("longterm_QAQC_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
+      verbatimTextOutput("longterm_QAQC_path_out"),
+      actionButton("attach_longterm", "Attach to longterm file."),
+      verbatimTextOutput("newLT_status")
       )
     })
+  })
 
+  # If generate_QAQC_plot button is selected, display plot with the selected parameters.
+  observeEvent(input$generate_QAQC_plot, {
+  output$QAQC_plot <- renderPlotly({
+    processed_file_path <- processed_outpath()
+    QAQC_data_path <- QAQC_outpath()
+    view_start <- input$view_start
+    view_end <- input$view_end
+    plot_start_trim <- input$plot_trim_days_start
+    plot_end_trim <- input$plot_trim_days_end
+    variable_to_plot <- input$variable_to_plot
+    mixed_plot <- input$join_plot_output
+    if(mixed_plot){
+    plot <- generate_level_plot(primary_data_path = processed_file_path,
+                  secondary_data_path = QAQC_data_path, 
+                  view_start = view_start,
+                  view_end = view_end,
+                  start_trim = 0,
+                  end_trim = 0,
+                  variable_name = variable_to_plot,
+                  mixed = TRUE)
+    }else{
+    plot <- generate_level_plot(primary_data_path = QAQC_data_path,
+                  view_start = view_start,
+                  view_end = view_end,
+                  start_trim = 0,
+                  end_trim = 0,
+                  variable_name = variable_to_plot)
+    }
+    ggplotly(plot)
+  })
+
+  })
+  
+  
+  # If a longterm QAQC file is selected, show plotting options.
+  observe({
+    if (length(input$longterm_QAQC_path_in) > 1) {
+      output$longterm_plot_viewer <- renderUI({
+        tagList(
+          h4("Longterm Data Viewer"),
+          checkboxInput("visualize_with_new", "Visualize with new data", value = FALSE),
+          actionButton("generate_longterm_plot", "Generate longterm plot"),
+          plotlyOutput("longterm_plot"),
+          hr()
+        )
+      })
+    }
   })
 
 
-# If generate_QAQC_plot button is selected, display plot with the selected parameters.
-  observeEvent(input$generate_QAQC_plot, {
-    output$QAQC_plot <- renderPlot({
-      processed_file_path <- processed_outpath()
-      QAQC_data_path <- QAQC_outpath()
-      view_start <- input$view_start
-      view_end <- input$view_end
-      plot_start_trim <- input$plot_trim_days_start
-      plot_end_trim <- input$plot_trim_days_end
-      variable_to_plot <- input$variable_to_plot
-      mixed_plot <- input$join_plot_output
-      if(mixed_plot){
-        plot <- generate_level_plot(primary_data_path = processed_file_path,
-                                    secondary_data_path = QAQC_data_path, 
-                                    view_start = view_start,
-                                    view_end = view_end,
-                                    start_trim = plot_start_trim,
-                                    end_trim = plot_end_trim,
-                                    variable_name = variable_to_plot,
-                                    mixed = TRUE)
-      }else{
-        plot <- generate_level_plot(primary_data_path = QAQC_data_path,
-                                    view_start = view_start,
-                                    view_end = view_end,
-                                    start_trim = plot_start_trim,
-                                    end_trim = plot_end_trim,
-                                    variable_name = variable_to_plot)
-      }
-      print(plot)
+  observeEvent(input$generate_longterm_plot, {
+    
+    longterm_file_path <- as.character(parseFilePaths(roots, input$longterm_QAQC_path_in)$datapath)
+    QAQC_data_path <- QAQC_outpath()
+    visualize_with_new <- input$visualize_with_new
+    
+    output$longterm_plot <- renderPlotly({
+        plot <- generate_longterm_plot(longterm_data_path = longterm_file_path,
+                                    ind_data_path = QAQC_data_path,
+                                    visualize_with_new = visualize_with_new)
+      ggplotly(plot)
     })
-
   })
 
 # if attach_to_longterm button is selected, attach QAQC'd data to the longterm data set and complete processing.
@@ -372,20 +415,22 @@ server <- function(input, output, session) {
     data_root <- parseDirPath(roots, input$data_root_in)
     ind_QAQC_path <- QAQC_outpath()
     longterm_QAQC_path <- as.character(parseFilePaths(roots, input$longterm_QAQC_path_in)$datapath)
-    
+
     lt_out <- attach_to_longterm(data_root, ind_QAQC_path, longterm_QAQC_path)
     newLT_outpath(lt_out)
 
+    date_range <- check_longterm_dates(newLT_outpath())
+
+    newLT_message <- paste0("New longterm file generated. Updated data date range: ", date_range)
+    newLT_outcode(newLT_message)
+
     output$longterm_dates <- renderUI({
       tagList(
-        h4("Processing complete. Updated Longterm data date range:"),
-        verbatimTextOutput("longterm_date_range")
+      h4("Processing complete. Updated Longterm data date range:"),
+      verbatimTextOutput("longterm_date_range")
       )
     })
   })
-
-
-
 # -----------------------------------------------------------------------------
 # Displaying messages on Input lines 
 # ------------------------------------------------------------------------------
@@ -480,8 +525,20 @@ server <- function(input, output, session) {
     })
 
     observe({
-      output$status <- renderPrint({
-          cat(outcode())
+      output$processed_status <- renderPrint({
+          cat(processed_outcode())
+        })
+    })
+
+    observe({
+      output$QAQC_status <- renderPrint({
+          cat(QAQC_outcode())
+        })
+    })
+
+    observe({
+      output$newLT_status <- renderPrint({
+          cat(newLT_outcode())
         })
     })
 
@@ -492,7 +549,7 @@ server <- function(input, output, session) {
     })
 
     observe({
-      output$qaqc_file_path_text <- renderPrint({
+      output$QAQC_file_path_text <- renderPrint({
         cat(QAQC_outpath())
       })
     })

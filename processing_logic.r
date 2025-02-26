@@ -7,6 +7,7 @@ library(tools)
 library(stringr)
 library(fs)
 library(pracma)
+library(lubridate)
 
 test_inputs <- function(data_root,
                          baro_path,
@@ -24,6 +25,40 @@ return(paste(data_root,
                    water_metadata_path))    
 }
 
+#longterm_data_path <- "C:/Users/mshawcroft/water_processing data test/Dutch Slough (template)/BigBreak/QAQC data/BigBreak_2022.02.23_2023.04.05_QAQC_longterm.csv"
+#ind_data_path <- "C:/Users/mshawcroft/water_processing data test/Dutch Slough (template)/BigBreak/QAQC data/individual/BigBreak_2022.02.23_2022.09.28_QAQC.csv"
+
+generate_longterm_plot <- function(longterm_data_path, ind_data_path, visualize_with_new){
+
+  longterm_dat <- read.csv(longterm_data_path) %>% select(time, air_temp, water_temp, salinity, water_level_above_sensor, water_level_NAVD88)
+  ind_dat <- read.csv(ind_data_path) %>% select(time, air_temp, water_temp, salinity, water_level_above_sensor, water_level_NAVD88)
+
+  dat1 <- rbind(longterm_dat, ind_dat) #Both data sets together.
+  dat2 <- longterm_dat #Just the existing longterm dataset.
+
+  dat1$month <- floor_date(as.Date(dat1$time), "month")
+  dat2$month <- floor_date(as.Date(dat2$time), "month")
+
+  monthly_counts1 <- dat1 %>% group_by(month) %>% summarise(count = n())
+  monthly_counts2 <- dat2 %>% group_by(month) %>% summarise(count = n())
+
+  if(visualize_with_new){
+    outplot <- ggplot() +
+               geom_bar(data = monthly_counts1, aes(x = month, y = count, fill = "Combined Data"), stat = "identity", alpha = 1) +
+               geom_bar(data = monthly_counts2, aes(x = month, y = count, fill = "Long-term Data"), stat = "identity", alpha = 1) +
+               labs(title = "Number of Observations per Month", x = "Month", y = "Number of Observations") +
+               scale_fill_manual(name = "Dataset", values = c("Long-term Data" = "blue", "Combined Data" = "red")) +
+               theme_minimal()
+  }else{
+    outplot <- ggplot() +
+           geom_bar(data = monthly_counts2, aes(x = month, y = count, fill = "Long-term Data"), stat = "identity", alpha = 1) +
+           labs(title = "Number of Observations per Month", x = "Month", y = "Number of Observations") +
+           scale_fill_manual(name = "Dataset", values = c("Long-term Data" = "blue")) +
+           theme_minimal()
+
+  }
+  return(outplot)
+}
 
 generate_level_plot <- function(primary_data_path, secondary_data_path = NULL, view_start = NULL, view_end = NULL, start_trim, end_trim, variable_name = "water_level_NAVD88", mixed = FALSE) {
   print(paste("view_start:", view_start))
@@ -69,6 +104,9 @@ generate_level_plot <- function(primary_data_path, secondary_data_path = NULL, v
 
   print("Data trimmed.")
 
+  view_start <- as.Date(view_start, format = "%m/%d/%Y")
+  view_end <- as.Date(view_end, format = "%m/%d/%Y")
+
   # Set view range
   if(is.null(view_start)){
     view_start <- min(trimmed_data$ymd)
@@ -98,7 +136,6 @@ generate_level_plot <- function(primary_data_path, secondary_data_path = NULL, v
   view_data$time <- as.POSIXct(view_data$time, format="%Y-%m-%d %H:%M:%S")
   # Generate the plot
   if(mixed == TRUE & !is.null(secondary_data_path)){
-
     this_plot <- ggplot(data = view_data, aes(x = time)) +
                   geom_line(aes(y = .data[[variable_name]], color = "pre-autoQAQC")) +
                   geom_line(aes(y = .data[[temp_name]], color = "post-autoQAQC"))
@@ -106,7 +143,6 @@ generate_level_plot <- function(primary_data_path, secondary_data_path = NULL, v
   }else{
     this_plot <- ggplot(data = view_data, aes(x = time, y = .data[[variable_name]])) + geom_line() + ggtitle("Time series", subtitle = variable_name)
   } 
-
   print("plot generated.")
   return(this_plot)
   
@@ -723,14 +759,15 @@ attach_to_longterm <- function(data_root, ind_QAQC_path, longterm_QAQC_path = ch
   QAQC_basedir      <- file.path(data_root, "QAQC data")
   new_QAQC_fullpath <- file.path(QAQC_basedir, new_QAQC_filename)
 
-  # Export updated long-term dataset
-  write.csv(combined_QAQC, new_QAQC_fullpath)
 
   # Move old long-term file into the longterm_history folder.
   if(length(longterm_QAQC_path) > 0){
     dir.create(file.path(QAQC_basedir, "longterm_history"), showWarnings = FALSE)
     fs::file_move(longterm_QAQC_path, file.path(QAQC_basedir, "longterm_history"))
   }
+
+  # Export updated long-term dataset
+  write.csv(combined_QAQC, new_QAQC_fullpath)
 
   return(new_QAQC_fullpath)
 
