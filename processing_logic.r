@@ -533,7 +533,9 @@ perform_auto_QAQC <- function(data_root,
                               trim_days_end,
                               auto_outlier_detection,
                               check_data_gaps,
-                              zscore_threshold = 5){
+                              waterLevel_zscore_threshold = 5,
+                              salinity_zscore_threshold = 5,
+                              waterTemp_zscore_threshold = 5){
 
   name_elements <- strsplit(tools::file_path_sans_ext(basename(level_processed_path)), split = "_")[[1]]
   logger_name <- name_elements[1]                              
@@ -625,7 +627,7 @@ perform_auto_QAQC <- function(data_root,
         group_by(date) %>% 
         summarise(count = n())
       log_file <- file(log_file_path, open = "at")
-      writeLines(paste0("Outliers detected in ", var_name, " and set to NA. Number of occurrences each day:"), log_file)
+      writeLines(paste0("Outliers detected in ", var_name, " using a threshold of ", threshold, ". Number of occurrences each day:"), log_file)
       writeLines(apply(outlier_counts, 1, function(row) paste(row[1], ":", row[2])), log_file)
       close(log_file)
       data[[var_name]] <- data$zfiltered
@@ -633,9 +635,9 @@ perform_auto_QAQC <- function(data_root,
     return(data)
   }
 
-  processed_data <- check_outliers(processed_data, "water_temp", threshold = zscore_threshold, log_file_path)
-  processed_data <- check_outliers(processed_data, "salinity", threshold = zscore_threshold, log_file_path)
-  processed_data <- check_outliers(processed_data, "water_level_NAVD88", threshold = zscore_threshold, log_file_path)
+  processed_data <- check_outliers(processed_data, "water_level_NAVD88", threshold = waterLevel_zscore_threshold, log_file_path)
+  processed_data <- check_outliers(processed_data, "salinity", threshold = salinity_zscore_threshold, log_file_path)
+  processed_data <- check_outliers(processed_data, "water_temp", threshold = waterTemp_zscore_threshold, log_file_path)
 
   }
 

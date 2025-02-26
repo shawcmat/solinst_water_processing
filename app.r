@@ -269,15 +269,17 @@ server <- function(input, output, session) {
 
   # If the "auto_outlier_detection" box in the QAQC options is checked, then the "set zscore threshold" option is visible.
   observe({ if (!is.null(input$auto_outlier_detection) && input$auto_outlier_detection) {
-  output$set_zscore_threshold <- renderUI({
-  tagList(
-    numericInput("zscore_threshold", "Z-Score Threshold:", value = 5, min = 1)
-      )
-  }) } else {
     output$set_zscore_threshold <- renderUI({
+      tagList(
+        numericInput("waterLevel_zscore_threshold", "Water level Z-Score Threshold:", value = 5, min = 1),
+        numericInput("salinity_zscore_threshold", "Salinity Z-Score Threshold:", value = 5, min = 1),
+        numericInput("waterTemp_zscore_threshold", "Water temp. Z-Score Threshold:", value = 5, min = 1)
+      )
+    }) } else {
+      output$set_zscore_threshold <- renderUI({
       NULL
     })
-    }
+  }
   })
 
   # If generate_plot button is selected, generate plot with the selected parameters.
@@ -301,6 +303,7 @@ server <- function(input, output, session) {
 
 # If auto_QAQC button is selected, run autoQAQC code with the selected parameters. Show QAQC plot viwer, and reveal step 7. (Longterm attach)
   observeEvent(input$auto_QAQC, {
+    QAQC_outcode("Running...")
     data_root <- parseDirPath(roots, input$data_root_in)
     processed_file_path <- processed_outpath()
     water_metadata_path <- as.character(parseFilePaths(roots, input$water_metadata_path_in)$datapath)
@@ -308,7 +311,9 @@ server <- function(input, output, session) {
     trim_days_end <- input$trim_days_end
     auto_outlier_detection <- input$auto_outlier_detection
     check_data_gaps <- input$check_data_gaps
-    zscore_threshold <- input$zscore_threshold
+    waterLevel_zscore_threshold <- input$waterLevel_zscore_threshold
+    salinity_zscore_threshold <- input$salinity_zscore_threshold
+    waterTemp_zscore_threshold <- input$waterTemp_zscore_threshold
 
     QAQC_path_out <- perform_auto_QAQC(data_root = data_root,
                      level_processed_path = processed_file_path,
@@ -317,7 +322,9 @@ server <- function(input, output, session) {
                      trim_days_end = trim_days_end,
                      auto_outlier_detection = auto_outlier_detection,
                      check_data_gaps = check_data_gaps,
-                     zscore_threshold = zscore_threshold)
+                     waterLevel_zscore_threshold = waterLevel_zscore_threshold,
+                     salinity_zscore_threshold = salinity_zscore_threshold,
+                     waterTemp_zscore_threshold = waterTemp_zscore_threshold)
 
     QAQC_outpath(QAQC_path_out)
     QAQC_message <- paste0("AutoQAQC complete. Output saved to ", QAQC_path_out)
@@ -421,7 +428,7 @@ server <- function(input, output, session) {
 
     date_range <- check_longterm_dates(newLT_outpath())
 
-    newLT_message <- paste0("New longterm file generated. Updated data date range: ", date_range)
+    newLT_message <- paste0("New longterm file generated. Updated data date range: ", date_range$message)
     newLT_outcode(newLT_message)
 
     output$longterm_dates <- renderUI({
