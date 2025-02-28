@@ -1,3 +1,4 @@
+source("./required_packages.r")
 library(shiny)
 library(shinyFiles)
 library(fs)
@@ -77,6 +78,7 @@ server <- function(input, output, session) {
   newLT_outcode <- reactiveVal()
   newLT_outcode("Waiting")
 
+
   # Update session volumes for folder and file selection.
   volumes <- getVolumes()()
 
@@ -87,6 +89,7 @@ server <- function(input, output, session) {
   shinyFileChoose(input, "level_path_in",           roots = roots, session = session)
   shinyFileChoose(input, "longterm_QAQC_path_in",      roots = roots, session = session)
   shinyFileChoose(input, "water_metadata_path_in", roots = roots, session = session)
+
 
   updateFileChoose <- function(SiteDir){
     #print("called!")

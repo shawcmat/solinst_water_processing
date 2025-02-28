@@ -7,8 +7,6 @@ library(tools)
 library(stringr)
 library(fs)
 library(pracma)
-library(lubridate)
-library(readxl)
 
 test_inputs <- function(data_root,
                          baro_path,
