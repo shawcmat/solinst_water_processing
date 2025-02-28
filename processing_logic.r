@@ -8,6 +8,7 @@ library(stringr)
 library(fs)
 library(pracma)
 library(lubridate)
+library(readxl)
 
 test_inputs <- function(data_root,
                          baro_path,
@@ -258,7 +259,7 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000, log
 
 
 # total pressure to water level above sensor (UPDATED 8-2022 SFJ)
-tp.to.wlas = function (logger.data, baro.data, h2o.density, log_file_path) {
+tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path) {
 
   baro.compensation <- function(logger.data, baro.data) {
     logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% # Water level data is filtered to exclude rows where time or total pressure is NA.
@@ -368,13 +369,6 @@ removeheader <- function(raw_data_path) {
 # ------------ Primary processing logic starts here --------------------------------------------------
 #----------------------------------------------------------------------------------------------------
 
-#data_root = "C:/Users/mshawcroft/water_processing data test" 
-#baro_path = "C:/Users/mshawcroft/water_processing data test/raw data/baro/Combined_2021.09.02_2023.05.01.csv"
-#baro_type = "tower"
-#raw_data_path = "C:/Users/mshawcroft/water_processing data test/raw data/BigBreak_2022.02.23_2022.09.28.csv"
-#level_type = "solinst"
-#water_metadata_path = "C:/Users/mshawcroft/water_processing data test/water_accessory.csv"
-
 process_data <- function(data_root,
                           baro_path,
                            baro_type,
@@ -399,9 +393,11 @@ process_data <- function(data_root,
   name_elements        <- strsplit(tools::file_path_sans_ext(basename(raw_data_path)), split = "_")[[1]]
   logger_name          <- name_elements[1]
 
-  level_start <- name_elements[2] %>% str_replace_all("\\.", "_")
-  level_end   <- name_elements[3] %>% str_replace_all("\\.", "_")
-  year_end    <-  paste0(as.character(lubridate::year(as.Date(level_end, format = "%Y_%m_%d")) + 1), "_01_01")
+  dates_output <- check_level_dates(raw_data_path)
+
+  level_start <- dates_output$start_date
+  level_end   <- dates_output$end_date
+  year_end    <-  paste0(as.character(lubridate::year(as.Date(level_end, format = "%m/%d/%Y")) + 1), "/01/01")
 
   level_processed_file_name <- paste0(paste(logger_name, name_elements[2], name_elements[3], "processed", sep = "_"), ".csv")
 
@@ -478,17 +474,20 @@ process_data <- function(data_root,
   }
 
   level = standardize.solinst(leveldata, log_file_path = log_file_path) # Standardize the water level data.
-
-  water_metadata = read.csv(water_metadata_path) # Pull in water accessory information look-up table
-
-  water_metadata$alt_name <- str_replace_all(water_metadata$logger, pattern = " ", replacement = "") # standardize logger names by removing spaces.
-
+ 
+ # Pull in water accessory information look-up table
+  water_metadata = read_excel(water_metadata_path, sheet = "logger metadata") %>% select(loggerID, dataStart, dataEnd, sensorElev, waterDensity, exposureHeight )
+  water_metadata$dataStart <- format(as.Date(water_metadata$dataStart, format = "%Y-%m-%d"), format = "%m/%d/%Y")
+  water_metadata$dataEnd <- format(as.Date(water_metadata$dataEnd, format = "%Y-%m-%d"), format = "%m/%d/%Y")
+   
+  #Find the record that matches the deployment.
+  water_metadata = water_metadata %>% filter(loggerID == logger_name) %>% filter(as.character(dataStart) == level_start)
+ 
   # Convert total pressure to water level above sensor using local water density & barometric pressure
-  level_barocomp = tp.to.wlas(level, baro, water_metadata$water_density[water_metadata$alt_name==logger_name], log_file_path) # TODO: Might be an issue with pressure range.
+  level_barocomp = tp.to.wlas(level, baro, water_metadata$waterDensity, log_file_path) # TODO: Might be an issue with pressure range.
 
   # Add final water level NAVD88 column by adding sensor elevation in NAVD88 to water level above sensor
-  level_barocomp$water_level_NAVD88 = level_barocomp$water_level_above_sensor + 
-    water_metadata$sensor_navd88[water_metadata$alt_name==logger_name]
+  level_barocomp$water_level_NAVD88 = level_barocomp$water_level_above_sensor + water_metadata$sensorElev
 
   # Re-name temperature columns to be more clear
   final_level = level_barocomp %>%
@@ -516,14 +515,14 @@ process_data <- function(data_root,
 }
 
 
-#data_root <- "C:/Users/mshawcroft/water_processing data test" 
-#level_processed_path <- "C:/Users/mshawcroft/water_processing data test/processed data/BigBreak_2022.02.23_2022.09.28_processed.csv"
-#water_metadata_path <- "C:/Users/mshawcroft/water_processing data test/water_accessory.csv"
-#trim_days_start <- 1
-#trim_days_end <- NULL
-#auto_outlier_detection <- TRUE
-#check_data_gaps <- TRUE
-
+data_root <- "C:/Users/mshawcroft/water_processing data test/testing/" 
+level_processed_path <- "C:/Users/mshawcroft/water_processing data test/testing/raw data/BigBreakGW_2022.02.23_2022.09.28.csv"
+trim_days_start <- 1
+trim_days_end <- NULL
+auto_outlier_detection <- TRUE
+check_data_gaps <- TRUE
+water_metadata_path <- "C:\\Users\\mshawcroft\\water_processing data test\\waterlogger metadata.xlsx"
+  
 #tout <- perform_auto_QAQC(data_root, level_processed_path, water_metadata_path, trim_days_start, trim_days_end, auto_outlier_detection, check_data_gaps)
 
 perform_auto_QAQC <- function(data_root,
@@ -537,6 +536,7 @@ perform_auto_QAQC <- function(data_root,
                               salinity_zscore_threshold = 5,
                               waterTemp_zscore_threshold = 5){
 
+  print("Performing auto QAQC.")
   name_elements <- strsplit(tools::file_path_sans_ext(basename(level_processed_path)), split = "_")[[1]]
   logger_name <- name_elements[1]                              
   level_start <- name_elements[2] %>% str_replace_all("\\.", "_")
@@ -549,7 +549,19 @@ perform_auto_QAQC <- function(data_root,
 
   level_QAQC_ind_name <- paste0(paste(logger_name, name_elements[2], name_elements[3], "QAQC", sep = "_"), ".csv")
 
-  water_metadata <- read.csv(water_metadata_path)
+
+  # Pull in water accessory information look-up table
+  
+  check_start <- as.Date(level_start, format = "%Y_%m_%d") %>% format("%m/%d/%Y")
+  check_end <- as.Date(level_end, format = "%Y_%m_%d") %>% format("%m/%d/%Y")
+
+  water_metadata = read_excel(water_metadata_path, sheet = "logger metadata") %>% select(loggerID, dataStart, dataEnd, sensorElev, waterDensity, exposureHeight )
+  water_metadata$dataStart <- format(as.Date(water_metadata$dataStart, format = "%Y-%m-%d"), format = "%m/%d/%Y")
+  water_metadata$dataEnd <- format(as.Date(water_metadata$dataEnd, format = "%Y-%m-%d"), format = "%m/%d/%Y")
+   
+  #Find the record that matches the deployment.
+  water_metadata = water_metadata %>% filter(loggerID == logger_name) %>% filter(as.character(dataStart) == check_start) %>% filter(as.character(dataEnd) == check_end)
+ 
   processed_data <- read.csv(level_processed_path) %>% select(time, air_temp, water_temp, salinity, water_level_above_sensor, water_level_NAVD88)
   #processed_data$time[4290:4302]
   processed_data$time <- as.POSIXct(processed_data$time, format = "%Y-%m-%d %H:%M:%S", tz = "Etc/GMT+8")
@@ -577,6 +589,7 @@ perform_auto_QAQC <- function(data_root,
   }
   
   # Trim start and end days according to specification.
+  print("Trimming start and end days according to specification.")
   if(!(trim_days_start == 0 & trim_days_end == 0)){
     log_file <- file(log_file_path, open = "at")
     writeLines("\nStart/End day trimming:\n", log_file)
@@ -603,6 +616,7 @@ perform_auto_QAQC <- function(data_root,
   }
 
   # Run basic outlier detection using z-scores.
+  print("Running basic outlier detection using Z-scores.")
   if(auto_outlier_detection){
     log_file <- file(log_file_path, open = "at")
     writeLines("\nBasic outlier detection using modified Z-score:\n", log_file)
@@ -642,7 +656,7 @@ perform_auto_QAQC <- function(data_root,
   }
 
   # Check for data gaps.
-
+  print("Checking for data gaps.")
   if (check_data_gaps) {
     log_file <- file(log_file_path, open = "at")
     writeLines("\nChecking for data gaps:\n", log_file)
@@ -677,6 +691,7 @@ perform_auto_QAQC <- function(data_root,
   close(log_file)
 
   #check for water temp observations below zero.
+  print("Checking for temp observations below zero.")
   if (any(processed_data$water_temp < 0, na.rm = TRUE)) {
     time_codes <- processed_data$time[processed_data$water_temp < 0]
     processed_data$water_temp[processed_data$water_temp < 0] <- NA
@@ -691,13 +706,18 @@ perform_auto_QAQC <- function(data_root,
   }
 
   #Check for water levels less than the long-term cutoff ("exposure_height" in the water accessory metadata) and set to NA.
-  exposure_height <- water_metadata$exposure_height[water_metadata$alt_name == logger_name]
-  if (is.na(exposure_height)) {
+  print("Checking for water levels less than long-term cutoff.")
+  exposure_height <- water_metadata$exposureHeight
+  print(exposure_height)
+  if (is.na(exposure_height) | exposure_height == 0) {
+    print("no exposure height.")
     log_file <- file(log_file_path, open = "at")
     writeLines("\nNo long-term cutoff (exposure height) is available in the metadata. Skipping check.", log_file)
     close(log_file)
   } else {
+    print("exposure height found.")
     if (any(processed_data$water_level_NAVD88 < exposure_height, na.rm = TRUE)) {
+      print("There is data to trim.")
       time_codes <- processed_data$time[processed_data$water_level_NAVD88 < exposure_height]
       processed_data$water_level_NAVD88[processed_data$water_level_NAVD88 < exposure_height] <- NA
       log_file <- file(log_file_path, open = "at")
@@ -705,6 +725,7 @@ perform_auto_QAQC <- function(data_root,
       writeLines(as.character(time_codes), log_file)
       close(log_file)
     }else{
+      print("There is no data to trim.")
       log_file <- file(log_file_path, open = "at")
       writeLines("\nNo water level observations were found to be below the exposure height.", log_file)
       close(log_file)
@@ -712,14 +733,16 @@ perform_auto_QAQC <- function(data_root,
   }
 
   # Fix time field
+  print("Fixing time field.")
   processed_data$time <- format(processed_data$time, "%Y-%m-%d %H:%M:%S")
 
   ind_QAQC_path <- file.path(QAQC_ind_directory, level_QAQC_ind_name)
   
+  print("Saving results.")
   write.csv(processed_data, ind_QAQC_path)
-
+  print("Processing complete.")
   return(ind_QAQC_path)
-
+  
 }
 
 #tout <- perform_auto_QAQC(data_root, level_processed_path, water_metadata_path, trim_days_start, trim_days_end, auto_outlier_detection, check_data_gaps)
@@ -732,6 +755,7 @@ perform_auto_QAQC <- function(data_root,
 
 attach_to_longterm <- function(data_root, ind_QAQC_path, longterm_QAQC_path = character(0)){
 
+  print("attaching to longterm file")
   name_elements <- strsplit(tools::file_path_sans_ext(basename(ind_QAQC_path)), split = "_")[[1]]
   logger_name <- name_elements[1]                              
   # Join newly processed data with the long term site dataset.-------------------------------------------------------------
@@ -761,7 +785,7 @@ attach_to_longterm <- function(data_root, ind_QAQC_path, longterm_QAQC_path = ch
   QAQC_basedir      <- file.path(data_root, "QAQC data")
   new_QAQC_fullpath <- file.path(QAQC_basedir, new_QAQC_filename)
 
-
+  print("Moving previous long-term file into the history folder.")
   # Move old long-term file into the longterm_history folder.
   if(length(longterm_QAQC_path) > 0){
     dir.create(file.path(QAQC_basedir, "longterm_history"), showWarnings = FALSE)
