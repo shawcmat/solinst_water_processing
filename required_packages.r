@@ -13,17 +13,11 @@ required_packages <- c(
     "fs",
     "remotes",
     "readxl",
-    "pracma"
+    "pracma" 
 )
 
-# Install missing packages
-for (pkg in required_packages) {
-    if (!require(pkg, character.only = TRUE)) {
-        install.packages(pkg, dependencies = TRUE)
-    }
-}
+install.packages(required_packages)
 
-# Install shinyFiles package from GitHub
-if (!require("shinyFiles", character.only = TRUE)) {
-    remotes::install_github("thomasp85/shinyFiles")
-}
+library(remotes)
+
+remotes::install_github("thomasp85/shinyFiles")

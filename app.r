@@ -1,4 +1,3 @@
-source("./required_packages.r")
 library(shiny)
 library(shinyFiles)
 library(fs)
