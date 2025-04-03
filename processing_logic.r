@@ -24,8 +24,6 @@ return(paste(data_root,
                    water_metadata_path))    
 }
 
-#longterm_data_path <- "C:/Users/mshawcroft/water_processing data test/Dutch Slough (template)/BigBreak/QAQC data/BigBreak_2022.02.23_2023.04.05_QAQC_longterm.csv"
-#ind_data_path <- "C:/Users/mshawcroft/water_processing data test/Dutch Slough (template)/BigBreak/QAQC data/individual/BigBreak_2022.02.23_2022.09.28_QAQC.csv"
 
 generate_longterm_plot <- function(longterm_data_path, ind_data_path, visualize_with_new){
 
@@ -513,16 +511,6 @@ process_data <- function(data_root,
 }
 
 
-data_root <- "C:/Users/mshawcroft/water_processing data test/testing/" 
-level_processed_path <- "C:/Users/mshawcroft/water_processing data test/testing/raw data/BigBreakGW_2022.02.23_2022.09.28.csv"
-trim_days_start <- 1
-trim_days_end <- NULL
-auto_outlier_detection <- TRUE
-check_data_gaps <- TRUE
-water_metadata_path <- "C:\\Users\\mshawcroft\\water_processing data test\\waterlogger metadata.xlsx"
-  
-#tout <- perform_auto_QAQC(data_root, level_processed_path, water_metadata_path, trim_days_start, trim_days_end, auto_outlier_detection, check_data_gaps)
-
 perform_auto_QAQC <- function(data_root,
                               level_processed_path,
                               water_metadata_path,
@@ -742,14 +730,6 @@ perform_auto_QAQC <- function(data_root,
   return(ind_QAQC_path)
   
 }
-
-#tout <- perform_auto_QAQC(data_root, level_processed_path, water_metadata_path, trim_days_start, trim_days_end, auto_outlier_detection, check_data_gaps)
-
-#data_root = "C:/Users/mshawcroft/water_processing data test/"
-#ind_QAQC_path = "C:/Users/mshawcroft/water_processing data test/QAQC data/individual/BigBreak_2022.02.23_2022.09.28_QAQC.csv"
-#longterm_QAQC_path = character(0)
-#longterm_QAQC_path = "C:/Users/mshawcroft/water_processing data test/QAQC data/BigBreak_2022.02.23_2022.09.26_QAQC_longterm.csv"
-#attach_to_longterm(data_root, ind_QAQC_path, longterm_QAQC_path)
 
 attach_to_longterm <- function(data_root, ind_QAQC_path, longterm_QAQC_path = character(0)){
 
