@@ -1,19 +1,19 @@
 # Overview
 
-The objective of this repository is to provide a standardized and simplified process to convert measurements of raw pressure and conductivity collected by water loggers into measurements of NAVD88 water height and water salinity. This is done through a simple graphical user interface created using R-shiny. Required inputs are an unprocessed data file collected by a solonist water logger in a .csv file format, and a table of metadata associated with each logger deployment (also in a .csv file format), and measurements of barometric data (air pressure) covering the time range associated with each deployment.
+The objective of this repository is to provide a standardized and simplified process to convert measurements of raw pressure and conductivity collected by water loggers into measurements of NAVD88 water height and water salinity. This is done through a simple graphical user interface created using R-shiny. Required inputs are an unprocessed data file collected by a solonist water logger in a .csv file format, a table of metadata associated with each logger deployment in an .xlsx format, and measurements of barometric data (air pressure) covering the time range associated with each deployment. In addition to processing the water data, the shiny application provides a quick and easy Auto QA/QC procedure to catch errors and clean data on the fly. The details of this procedure are described in part 2 of this document.
+
+# 1. Water processing logic.
 
 The solonist water loggers record total pressure (atmospheric and water) as meters of water-equivalent pressure. These values are recorded with the column heading *level*. So, a *level* value of 10m is the amount of pressure given 10 meters of water, at the preprogrammed water density. The actual processing code convert these *level* values into NAVD88 water height with the following transformations.
 
-1.   From meters of water-equivalent pressure we calculate total pressure in Kilopascals (Kpa). We do this using a standard pressure formula *P = pgh*, where *P* is pressure in pascals, *p* is the given density of the water, g is acceleration due to gravity, and h is the height of the water column in meters.
+1.  From meters of water-equivalent pressure we calculate total pressure in Kilopascals (Kpa). We do this using a standard pressure formula *P = pgh*, where *P* is pressure in pascals, *p* is the given density of the water, g is acceleration due to gravity, and h is the height of the water column in meters.
 2.  From total pressure (Kpa) we calculate water pressure (Kpa) by subtracting barometric pressure (measured in a separate barometric dataset) for each observation.
 3.  From water pressure (Kpa) we calculate the water level above the sensor, again using a standard pressure formula P = pgh.
 4.  From height above the sensor, we calculate NAVD88 water height by adding the sensor height (recorded by RTK at time of retrieval and included in the deployment metadata) to the height above the sensor.
 
 Salinity is calculated from conductivity using this formula:
 
--    *salinity =* 0.012 + (-0.2174 \* (*conductivity* / 53.087)\^1.5)  + (25.3283 \* (*conductivity*/ 53.087) \^1) + (13.7714 \* (*conductivity / 53.087)\^1.5) + (-6.4788 \* (conductivity/53.087)\^2) + (2.5842 \* (conductivity/53.087)\^2.5)*
-
-# Water processing logic, step-by-step.
+-   *salinity =* 0.012 + (-0.2174 \* (*conductivity* / 53.087)\^1.5)  + (25.3283 \* (*conductivity*/ 53.087) \^1) + (13.7714 \* (*conductivity / 53.087)\^1.5) + (-6.4788 \* (conductivity/53.087)\^2) + (2.5842 \* (conductivity/53.087)\^2.5)*
 
 ## A. Water logger data is loaded and prepared.
 
@@ -47,12 +47,11 @@ Salinity is calculated from conductivity using this formula:
 
 1.  The solonist water loggers record total pressure (atmospheric and water) as meters of water-equivalent pressure. So, a *level* value of 10m is the amount of pressure given 10 meters of water, at the preprogrammed water density (should be 1000). We need to standardize these values to a more usable unit of measurement. We do this using a standard pressure formula *P = pgh*, where *P* is pressure in pascals, *p* is the given density of the water, g is acceleration due to gravity, and h is the height of the water column in meters. We also convert the pascals into kilopascals by dividing the result by 1000. The resulting formula looks like this:
     -   *total_pressure (in Kpa)* = *level*  \* programmed.h2o.density \* 9.80665/1000
-2.   We also convert the *conductivity* measurements into and *salinity* using the following formula.
-    -   *salinity =* 0.012 + (-0.2174 \* (*conductivity* / 53.087)\^1.5)  + (25.3283 \* (*conductivity*/ 53.087) \^1) + (13.7714 \* (*conductivity / 53.087)\^1.5) + (-6.4788 \* (conductivity/53.087)\^2) + (2.5842 \* (conductivity/53.087)\^2.5)*
+2.  We also convert the *conductivity* measurements into and *salinity* using the following formula. - *salinity =* 0.012 + (-0.2174 \* (*conductivity* / 53.087)\^1.5)  + (25.3283 \* (*conductivity*/ 53.087) \^1) + (13.7714 \* (*conductivity / 53.087)\^1.5) + (-6.4788 \* (conductivity/53.087)\^2) + (2.5842 \* (conductivity/53.087)\^2.5)*
 
 ## E. Calculate water level above sensor using barometry data.
 
-1.  water_accessory.csv table is opened as a dataframe. A new column named *alt_name* is created as a standardized reference field by removing all spaces from the *logger* column. (When new metadata table is created this won't be neccessary).
+1.  The waterlogger metadata excel table is opened as a dataframe. The dataStart and dataEnd columns are formatted as character fields with a normalized date format.
 2.  Check for issues in the water logger data and throw warnings if detected.
     -   Check if the water logger data has the correct columns. If not, stop with a warning that logger data requires *time* and *total_pressure* columns.
 
@@ -67,7 +66,7 @@ Salinity is calculated from conductivity using this formula:
     -   Check to see if the range of the *total_pressure* column in the water logger data falls between 90 and 150. If not contained in this range, it could be a sign that the units of pressure are incorrect. (Should be kPa).
 
     -   Check to see if the range of the *baro_pressure* column in the barometric data falls between 90 and 150. If not contained in this range, it could be a sign that the units of pressure are incorrect. (Should be kPa).
-3.   *water_pressure* is calculated from *total_pressure* using the following steps:
+3.  *water_pressure* is calculated from *total_pressure* using the following steps:
     -   Water level data is filtered to exclude rows where time or total pressure is NA.
 
     -   Barometric data is filtered to exclude rows where time or barometric pressure is NA.
@@ -86,4 +85,52 @@ Salinity is calculated from conductivity using this formula:
 ## G. Final steps.
 
 1.  *i.temperature* and *temperature* are renamed as *water_temp* and *air_temp* respectively.
-2.  Completed data is saved in the *processed* folder, and also appended to the long term data file for this site.
+2.  Completed data is saved in a folder named *processed data*.
+
+# 2. Auto QAQC Procedure.
+
+To make data processing as painless as possible, an auto QAQC procedure was developed to catch the most common data issues associated with these kinds of logger deployments. For simplicity these are grouped into three categories.
+
+1.  Issues with deployment/retrieval. It is often the case that a logger begins to collect data before being placed in the water at the time of deployment, or continues to collect data for hours or even days after retrieval. When looking at a time series of the data, these issues are very easy to notice because the variable values will be extremely noisy and spiky during these periods. The solution is to simply trim data at the beginning and end of the data collection period as required. The shiny application allows the user to quickly produce a plot of different data variables to determine the number of days to trim from the start or end of a dataset.
+2.  Issues with extreme outliers and impossible values. Water loggers are sensitive instruments and can produce extreme data outliers if disturbed. The shiny application allows the user to explore the data and identify any obvious outliers. It then allows the user to perform an automatic modified z-score filter to detect and remove them.
+3.  Issues with data gaps. While these instruments are designed to collect data at regular intervals, occasionally these patterns are disrupted. Auto QAQC procedure will detect any data gaps an note them in the log file.
+
+All manipulations of the data are noted in an output log file that can be easily referenced by the user. It is recommended to not rely on these tools completely, and carefully note any manipulations to the data taking place to verify that real data is not being thrown out.
+
+## A. Selecting parameters
+
+1.  The user selects processing parameters using the shiny application interface. Parameters include the number of days to trim from the start or end of the data, which autoQAQC steps to perform, and which z-score thresholds to use for each variable if auto outlier detection is being performed.
+2.  Pulling from previously used file paths, the code derives several more parameters including the data output location, which log file to use, and any relevant metadata.
+
+## B. Trim start and end days according to specification.
+
+1.  If this option is selected, then the time column of the data is used to derive calendar days, and a new start date and end date are derived by adding/subtracting the specified trim integers from the start_date/end_date of the data. These new start and end dates are then used to filter the data to only include data within the new range.
+2.  The number of days removed, the specific dates removed, and the number of observations occurring on those days, are all noted in the log file.
+
+## C. Basic outlier detection using modified z-scores.
+
+1.  If this option is selected, then column values are converted into modfied z-scores and filtered using a specified threshold.
+2.  While a regular z-score measures a value's distance from the mean in standard deviation units, a modified z-score from the median. This allows the filter to perform well on data with extremely dramatic outliers, as is often the case with water logger data. A modified z-score is calculated using the following steps:
+    -   The median of a variable is calculated. (med)
+
+    -   The MAD, or median absolute deviation is calculated using the following formula.
+
+        $median(abs(x-x_med))$
+
+    -   A modified zscore is calculated using the following formula.
+
+        $\frac{0.6745 * (x - median(x)}{MAD}$
+3.  We then compare the modified z-score of each value against a user-specified threshold to determine if a value is an outlier or not. Outliers are set to NA, and the cleaned data is returned.
+4.  All changes to the data are recorded in the log file.
+
+## D. Checking for data gaps.
+
+1.   The difference of time between each observation and the following observation is calculated. These differences, in seconds, are compared to a user-specified expected time difference.
+2.  Gaps are determined as being which time differences are larger than the expected time difference. The locations of these gaps, including the previous and proceeding time stamps, are recorded in the log file.
+
+## E. Additional checks.
+
+As a precaution against other issues, a few additional simple data checks are performed.
+
+1.  Water temperatures are checked for values below zero. Any values identified are set to NA and recorded in the log file.
+2.  Occasionally, a "exposureHeight" will be specified in the metadata as being a user set water level threshold. We believe this is to be an attempt to clean any messy salinity data that occurs when the sensor is at water level. If provided, the autoQAQC will set all variables to NA at observations where the water level is below this exposure height.

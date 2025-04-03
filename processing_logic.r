@@ -255,7 +255,10 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000, log
 
 
 # total pressure to water level above sensor (UPDATED 8-2022 SFJ)
-tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path) {
+tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path){
+  if(h2o.density == "" | is.na(h2o.density) | h2o.density == "NA"){
+    h2o.density = 1000
+  }
 
   baro.compensation <- function(logger.data, baro.data) {
     logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% # Water level data is filtered to exclude rows where time or total pressure is NA.
@@ -601,7 +604,7 @@ perform_auto_QAQC <- function(data_root,
     close(log_file)
   }
 
-  # Run basic outlier detection using z-scores.
+  # Run basic outlier detection using modified z-scores.
   print("Running basic outlier detection using Z-scores.")
   if(auto_outlier_detection){
     log_file <- file(log_file_path, open = "at")
@@ -644,14 +647,16 @@ perform_auto_QAQC <- function(data_root,
   # Check for data gaps.
   print("Checking for data gaps.")
   if (check_data_gaps) {
-    log_file <- file(log_file_path, open = "at")
-    writeLines("\nChecking for data gaps:\n", log_file)
-    close(log_file)
-    
+
     processed_data$time <- as.POSIXct(processed_data$time, format="%Y-%m-%d %H:%M:%S")
     time_diffs <- diff(processed_data$time)
-    expected_diff <- as.difftime(360, units = "secs")
+    expected_diff <- as.difftime(as.numeric(names(sort(table(time_diffs), decreasing = TRUE)[1])), units = "secs")
     gaps <- which(time_diffs > expected_diff)
+    repeats <- which(time_diffs < expected_diff)
+
+    log_file <- file(log_file_path, open = "at")
+    writeLines(paste0("\nChecking for data gaps. \nExpected time interval in seconds:", expected_diff), log_file)
+    close(log_file)
     
     if (length(gaps) > 0) {
       log_file <- file(log_file_path, open = "at")
@@ -660,14 +665,23 @@ perform_auto_QAQC <- function(data_root,
             missing_count <- as.numeric(time_diffs[gap]) / as.numeric(expected_diff) - 1
             start_time <- processed_data$time[gap]
             end_time <- processed_data$time[gap + 1]
-            writeLines(paste(missing_count, "observation(s) missing between", format(start_time, "%m/%d/%Y %I:%M:%S %p"), "and", format(end_time, "%m/%d/%Y %I:%M:%S %p")), log_file)
+            writeLines(paste("\n", missing_count, "observation(s) missing between", format(start_time, "%m/%d/%Y %I:%M:%S %p"), "and", format(end_time, "%m/%d/%Y %I:%M:%S %p")), log_file)
         }
 
       }
       close(log_file)
     } else {
       log_file <- file(log_file_path, open = "at")
-      writeLines("No data gaps detected.", log_file)
+      writeLines("\nNo data gaps detected.", log_file)
+      close(log_file)
+    }
+    if (length(repeats) > 0) {
+      log_file <- file(log_file_path, open = "at")
+      writeLines(paste("\nNote:", length(repeats), "repeat observations detected."))
+      close(log_file)
+    } else {
+      log_file <- file(log_file_path, open = "at")
+      writeLines("No data repeats detected.", log_file)
       close(log_file)
     }
   }
@@ -706,6 +720,8 @@ perform_auto_QAQC <- function(data_root,
       print("There is data to trim.")
       time_codes <- processed_data$time[processed_data$water_level_NAVD88 < exposure_height]
       processed_data$water_level_NAVD88[processed_data$water_level_NAVD88 < exposure_height] <- NA
+      processed_data$salinity[processed_data$water_level_NAVD88 < exposure_height] <- NA
+      processed_data$water_temp[processed_data$water_level_NAVD88 < exposure_height] <- NA
       log_file <- file(log_file_path, open = "at")
       writeLines("\nWater level observations below exposure height found and set to NA. Time codes of affected observations:", log_file)
       writeLines(as.character(time_codes), log_file)

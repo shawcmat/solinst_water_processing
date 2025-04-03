@@ -13,7 +13,7 @@ required_packages <- c(
     "fs",
     "remotes",
     "readxl",
-    "pracma" 
+    "pracma"
 )
 
 install.packages(required_packages)
