@@ -152,9 +152,9 @@ server <- function(input, output, session) {
       output$part3_baro <- renderUI({
         tagList(
         h4("3. Select a barometric pressure data file associated with your deployment."),
+        selectInput("baro_type", "Select baro type", choices = c("tower", "logger")),
         shinyFilesButton("baro_path_in", "File select", "Please select a file", multiple = FALSE, viewtype = "detail"),
         verbatimTextOutput("baro_path_out"),
-        selectInput("baro_type", "Select baro type", choices = c("tower", "logger (Not implemented yet)")),
         hr()
         )
       })
@@ -470,7 +470,8 @@ server <- function(input, output, session) {
       cat("")
     }else{
       baro_path <- as.character(parseFilePaths(roots, input$baro_path_in)$datapath)
-      date_range <- check_baro_dates(baro_path)
+      baro_type <- input$baro_type
+      date_range <- check_baro_dates(baro_path, baro_type)
       cat(date_range$message)
     }
   })

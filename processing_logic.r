@@ -145,8 +145,15 @@ generate_level_plot <- function(primary_data_path, secondary_data_path = NULL, v
   
 }
 
-check_baro_dates <- function(baro_path){
-  dat <- standardize.tower.baro(baro_path)
+check_baro_dates <- function(baro_path, baro_type){
+  print(paste0("baro path: ", baro_path))
+  print(paste0("baro type: ", baro_type))
+  dat <- if (baro_type == "logger") { 
+    # Check baro type. If logger, use logger standardization function.
+    standardize.baro(baro_path) 
+  } else if (baro_type == "tower") {
+    standardize.tower.baro(baro_path)
+  }
   min_time <- min(dat$time)
   max_time <- max(dat$time)
   min_time_str <- format(min_time, "%m/%d/%Y")
@@ -155,21 +162,31 @@ check_baro_dates <- function(baro_path){
   return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
 }
 
-check_level_dates <- function(solinst_path){
+
+check_level_dates <- function(solinst_path, file_header = TRUE){
 
   name_elements        <- strsplit(tools::file_path_sans_ext(basename(solinst_path)), split = "_")[[1]]
   logger_name          <- name_elements[1]
 
-  dat <- removeheader(solinst_path)
-  dat <- dat$data
-  dat <- transmute(dat,
-   time = if(any(grepl("M", Time))){as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")}
-   else{as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8")})
-  min_time <- min(dat$time)
-  max_time <- max(dat$time)
-  min_time_str <- format(min_time, "%m/%d/%Y")
-  max_time_str <- format(max_time, "%m/%d/%Y")
-  
+  if(!file_header){
+    dat <- read.csv(solinst_path)
+    min_time <- min(dat$time) %>% as.Date()
+    max_time <- max(dat$time) %>% as.Date()
+    min_time_str <- format(min_time, "%m/%d/%Y")
+    max_time_str <- format(max_time, "%m/%d/%Y")
+  }
+  if (file_header){
+    dat <- removeheader(solinst_path)
+    dat <- dat$data
+    dat <- transmute(dat,
+    time = if(any(grepl("M", Time))){as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %I:%M:%S %p", tz = "Etc/GMT+8")}
+           else{as.POSIXct(paste(Date, Time), format = "%m/%d/%Y %H:%M:%S", tz = "Etc/GMT+8")})
+    min_time <- min(dat$time)
+    max_time <- max(dat$time)
+    min_time_str <- format(min_time, "%m/%d/%Y")
+    max_time_str <- format(max_time, "%m/%d/%Y")
+  }
+
   message <- paste("First date:", min_time_str, "Last date:", max_time_str, "     File name:", basename(solinst_path), "     Logger Name:", logger_name)
 
   return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
@@ -185,6 +202,24 @@ check_longterm_dates <- function(longterm_QAQC_path){
 
   return(list("start_date" = min_time_str, "end_date" = max_time_str, "message" = message))
 }
+
+standardize.baro <- function(solinst.file) {
+  # Throw away header rows
+  solinst.headers <- readLines(solinst.file, n = 25)
+  header.count = suppressWarnings(min(grep('^Date,Time,.*', solinst.headers)) - 1)
+  solinst.csv <- read.csv(solinst.file, stringsAsFactors = FALSE,
+                          skip = header.count)
+  results <- solinst.csv %>%
+    transmute(
+      time = as.POSIXct(paste(Date, Time), format = '%m/%d/%Y %H:%M:%S', tz = 'Etc/GMT+8'),
+      baro_pressure = ifelse(max(LEVEL) < 9.5, (LEVEL + 9.5) * 9.80665, 
+                             ifelse(max(LEVEL) < 100, LEVEL * 9.80665, LEVEL)),
+      temperature = TEMPERATURE
+    )
+  
+  results
+}
+
 
 standardize.tower.baro = function(baro_path) {
   tower.csv <- read.csv(baro_path, stringsAsFactors = FALSE)
@@ -256,10 +291,9 @@ standardize.solinst = function (solinst.data, programmed.h2o.density = 1000, log
 
 # total pressure to water level above sensor (UPDATED 8-2022 SFJ)
 tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path){
-  if(h2o.density == "" | is.na(h2o.density) | h2o.density == "NA"){
-    h2o.density = 1000
-  }
 
+  h2o.density = 1000 #We are always defaulting h2o desnity to 1000.
+  
   baro.compensation <- function(logger.data, baro.data) {
     logger.dt <- logger.data %>% filter(!is.na(time), !is.na(total_pressure)) %>% # Water level data is filtered to exclude rows where time or total pressure is NA.
       data.table(key = "time")
@@ -278,6 +312,8 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
 
   logger.data.columns <- c("time", "total_pressure")
   baro.data.columns <- c("time", "baro_pressure")
+  
+  print("Checking logger columns.")
   if (!length(intersect(logger.data.columns, colnames(logger.data))) == length(logger.data.columns)) {
     msg <- "Processing error in tp.to.wlas: Logger data must have columns: \"time\", \"total_pressure\""
     log_file <- file(log_file_path, open = "at")
@@ -285,6 +321,7 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
     close(log_file)
     stop(msg)
   }
+  print("Checking baro cloumns.")
   if (!length(intersect(baro.data.columns, colnames(baro.data))) == length(baro.data.columns)) {
     msg <- "Processing error in tp.to.wlas: Baro data must have columns: \"time\", \"baro_pressure\""
     log_file <- file(log_file_path, open = "at")
@@ -292,6 +329,7 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
     close(log_file)
     stop(msg)
   }
+    print("Checking logger time format.")
   if (!any(class(logger.data$time) == "POSIXct")) {
     msg <- "Processing error in tp.to.wlas: Logger data time must be POSIXct"
     log_file <- file(log_file_path, open = "at")
@@ -299,6 +337,8 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
     close(log_file)
     stop(msg)
   }
+
+  print("Checking Baro time format")
   if (!any(class(baro.data$time) == "POSIXct")) {
     msg <- "Processing error in tp.to.wlas: Baro data time must be POSIXct"
     log_file <- file(log_file_path, open = "at")
@@ -313,6 +353,8 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
     close(log_file)
     stop(msg)
   }
+
+  print("Checking for logger/baro time match.")
   if (min(logger.data$time) < min(baro.data$time) | max(logger.data$time) > max(baro.data$time)) {
     msg <- sprintf("Warning in tp.to.wlas: Time range for logger data (%s - %s) is not contained within time range for baro data (%s - %s). Data will be incorrectly compensated.",
                    format(min(logger.data$time), "%Y-%m-%d %H:%M"),
@@ -324,6 +366,7 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
     close(log_file)
     warning(msg)
   }
+
   if (min(na.omit(logger.data$total_pressure)) < 90 | max(na.omit(logger.data$total_pressure > 150))) {
     msg <- "Warning in tp.to.wlas: Logger data total pressure not contained in range 90:150. Check units (should be kPa)."
     log_file <- file(log_file_path, open = "at")
@@ -341,6 +384,13 @@ tp.to.wlas = function (logger.data, baro.data, h2o.density = 1000, log_file_path
   logger.data %>% baro.compensation(baro.data) %>% level.conversion(h2o.density)
 }
 
+
+remove_commas <- function(input_string) { # First, create function to remove commas from header if the occur during file import
+  # Use gsub to replace commas with an empty string
+  cleaned_string <- gsub(",", "", input_string)
+  return(cleaned_string)
+}
+
 # Splits header and data from a solinst data file.
 removeheader <- function(raw_data_path) {
   headers <- readLines(raw_data_path, n = 25) #Load lines of text, capturing header.
@@ -356,6 +406,8 @@ removeheader <- function(raw_data_path) {
       header_data_clean <- str_split(header_data_clean, pattern = ":")
       names_vector  <- sapply(header_data_clean, `[[`, 1) #Header labels
       values_vector <- sapply(header_data_clean, `[[`, 2) #Header values
+      names_vector <- remove_commas(names_vector)
+      values_vector <- remove_commas(values_vector)
       header_data_clean <- data.frame(as.list(values_vector)) #Create dataframe
       names(header_data_clean) <- names_vector # Set name
       return(list("header" = header_data_clean, "data" = real_data))
@@ -367,6 +419,7 @@ removeheader <- function(raw_data_path) {
 #-----------------------------------------------------------------------------------------------------
 # ------------ Primary processing logic starts here --------------------------------------------------
 #----------------------------------------------------------------------------------------------------
+
 
 process_data <- function(data_root,
                           baro_path,
@@ -454,7 +507,7 @@ process_data <- function(data_root,
   print("2. Loading and processing baro data.")
   baro.fxn = function(baro_type, baro_path){ 
     if(baro_type == "logger"){ # Check baro type. If logger, use logger standardization function.
-      standardize.baro(baro_path) # TODO: Currently not a function explicitly written in the script.
+      standardize.baro(baro_path)
     }else{
       standardize.tower.baro(baro_path) #If not logger, assumes it is tower, and calls that function instead.
     }
@@ -475,27 +528,39 @@ process_data <- function(data_root,
   level = standardize.solinst(leveldata, log_file_path = log_file_path) # Standardize the water level data.
  
  # Pull in water accessory information look-up table
+ print("Pull in water accessory information look-up table")
   water_metadata = read_excel(water_metadata_path, sheet = "logger metadata") %>% select(loggerID, dataStart, dataEnd, sensorElev, waterDensity, exposureHeight )
   water_metadata$dataStart <- format(as.Date(water_metadata$dataStart, format = "%Y-%m-%d"), format = "%m/%d/%Y")
   water_metadata$dataEnd <- format(as.Date(water_metadata$dataEnd, format = "%Y-%m-%d"), format = "%m/%d/%Y")
    
   #Find the record that matches the deployment.
+   print("Find the record that matches the deloyment")
   water_metadata = water_metadata %>% filter(loggerID == logger_name) %>% filter(as.character(dataStart) == level_start)
  
+ if(nrow(water_metadata) == 0){
+  stop("Processing error: Unable to locate metadata record for this deployment based on derived start and end dates.
+   Check metadata and make sure dataStart and dataEnd align with the first and last recordings in the datafile.")
+ }
+
   # Convert total pressure to water level above sensor using local water density & barometric pressure
+  print("Convert total pressure to water level above sensor using local water density & barometric pressure")
   level_barocomp = tp.to.wlas(level, baro, water_metadata$waterDensity, log_file_path) # TODO: Might be an issue with pressure range.
 
   # Add final water level NAVD88 column by adding sensor elevation in NAVD88 to water level above sensor
+  print("Add final water level NAVD88 column by adding sensor elevation in NAVD88 to water level above sensor")
   level_barocomp$water_level_NAVD88 = level_barocomp$water_level_above_sensor + water_metadata$sensorElev
 
   # Re-name temperature columns to be more clear
+  print("Rename temeprature columns")
   final_level = level_barocomp %>%
     rename(water_temp = i.temperature, air_temp = temperature)
 
   # Fix time field
+  print("fix time field")
   final_level$time <- format(final_level$time, "%Y-%m-%d %H:%M:%S")
 
   # Export processed dataset
+  print("Export processed dataset")
   processed_file_out <- file.path(level_processed_path, level_processed_file_name)
   write.csv(final_level, processed_file_out )
 
@@ -513,7 +578,6 @@ process_data <- function(data_root,
   
 }
 
-
 perform_auto_QAQC <- function(data_root,
                               level_processed_path,
                               water_metadata_path,
@@ -527,9 +591,14 @@ perform_auto_QAQC <- function(data_root,
 
   print("Performing auto QAQC.")
   name_elements <- strsplit(tools::file_path_sans_ext(basename(level_processed_path)), split = "_")[[1]]
-  logger_name <- name_elements[1]                              
-  level_start <- name_elements[2] %>% str_replace_all("\\.", "_")
-  level_end   <- name_elements[3] %>% str_replace_all("\\.", "_")
+
+  dates_output <- check_level_dates(level_processed_path, file_header = FALSE)
+
+  level_start <- dates_output$start_date
+  level_end   <- dates_output$end_date
+
+  logger_name <- name_elements[1]
+
 
   QAQC_directory <- file.path(data_root, "QAQC data" )
   dir.create(QAQC_directory, showWarnings = FALSE)
@@ -540,17 +609,22 @@ perform_auto_QAQC <- function(data_root,
 
 
   # Pull in water accessory information look-up table
-  
-  check_start <- as.Date(level_start, format = "%Y_%m_%d") %>% format("%m/%d/%Y")
-  check_end <- as.Date(level_end, format = "%Y_%m_%d") %>% format("%m/%d/%Y")
+
+  check_start <- level_start
+  check_end <- level_end
 
   water_metadata = read_excel(water_metadata_path, sheet = "logger metadata") %>% select(loggerID, dataStart, dataEnd, sensorElev, waterDensity, exposureHeight )
   water_metadata$dataStart <- format(as.Date(water_metadata$dataStart, format = "%Y-%m-%d"), format = "%m/%d/%Y")
   water_metadata$dataEnd <- format(as.Date(water_metadata$dataEnd, format = "%Y-%m-%d"), format = "%m/%d/%Y")
-   
+
   #Find the record that matches the deployment.
   water_metadata = water_metadata %>% filter(loggerID == logger_name) %>% filter(as.character(dataStart) == check_start) %>% filter(as.character(dataEnd) == check_end)
  
+  if(nrow(water_metadata) == 0){
+  stop("Processing error: Unable to locate metadata record for this deployment based on derived start and end dates.
+   Check metadata and make sure dataStart and dataEnd align with the first and last recordings in the datafile.")
+ }
+
   processed_data <- read.csv(level_processed_path) %>% select(time, air_temp, water_temp, salinity, water_level_above_sensor, water_level_NAVD88)
   #processed_data$time[4290:4302]
   processed_data$time <- as.POSIXct(processed_data$time, format = "%Y-%m-%d %H:%M:%S", tz = "Etc/GMT+8")
@@ -709,6 +783,7 @@ perform_auto_QAQC <- function(data_root,
   print("Checking for water levels less than long-term cutoff.")
   exposure_height <- water_metadata$exposureHeight
   print(exposure_height)
+  if(length(exposure_height) == 0)
   if (is.na(exposure_height) | exposure_height == 0) {
     print("no exposure height.")
     log_file <- file(log_file_path, open = "at")
